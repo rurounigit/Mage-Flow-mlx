@@ -559,12 +559,7 @@ class MageVAE(nn.Module):
 
     def _load_weights(self, ckpt_path: str) -> None:
         """Load encoder and decoder weights from safetensors."""
-        from safetensors import safe_open
-
-        weights = {}
-        with safe_open(ckpt_path, framework="numpy") as f:
-            for key in f.keys():
-                weights[key] = mx.array(f.get_tensor(key))
+        weights = mx.load(ckpt_path)
 
         self.load_weights(list(weights.items()), strict=False)
         print(f"  Loaded VAE: {len(weights)} tensors")

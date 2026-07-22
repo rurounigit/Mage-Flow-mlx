@@ -27,8 +27,8 @@ def main():
         help="Text prompt for image generation"
     )
     parser.add_argument(
-        "--model", type=str, default=None,
-        help="Path to MLX model directory (defaults to the available 8-bit model)"
+        "--model", type=str, default="models/mage_flow_mlx",
+        help="Path to the BF16 MLX model directory"
     )
     parser.add_argument(
         "--steps", type=int, default=4,
@@ -60,15 +60,15 @@ def main():
     )
     args = parser.parse_args()
 
-    # Prefer the validated quality-preserving checkpoint when both the legacy
-    # 4-bit conversion and the newer 8-bit conversion exist locally.
-    if args.model is None:
-        preferred = "models/mage_flow_mlx_8bit"
-        args.model = preferred if os.path.exists(preferred) else "models/mage_flow_mlx"
-
     # Validate dimensions
-    if args.height % 16 != 0 or args.width % 16 != 0:
-        print(f"Error: height and width must be multiples of 16, got {args.height}x{args.width}")
+    if args.height <= 0 or args.width <= 0 or args.height % 16 or args.width % 16:
+        print(f"Error: height and width must be positive multiples of 16, got {args.height}x{args.width}")
+        sys.exit(1)
+    if args.steps <= 0:
+        print(f"Error: steps must be positive, got {args.steps}")
+        sys.exit(1)
+    if args.guidance < 1.0:
+        print(f"Error: guidance must be at least 1.0, got {args.guidance}")
         sys.exit(1)
 
     # Check model directory

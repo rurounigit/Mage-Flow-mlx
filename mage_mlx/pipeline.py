@@ -16,7 +16,6 @@ import os
 from typing import Any
 
 import mlx.core as mx
-import mlx.nn as nn
 import numpy as np
 from PIL import Image
 
@@ -87,44 +86,14 @@ class MageFlowPipeline:
         )
         transformer = MageFlow(params)
 
-        quant_config_path = os.path.join(model_dir, "quantization_config.json")
-        quant_bits = 4
-        text_quant_bits = 4
-        quant_group_size = 64
-        if os.path.exists(quant_config_path):
-            with open(quant_config_path) as f:
-                quant_config = json.load(f)
-            quant_bits = int(quant_config.get("transformer_bits", quant_bits))
-            text_quant_bits = int(
-                quant_config.get("text_encoder_bits", text_quant_bits)
-            )
-            quant_group_size = int(quant_config.get("group_size", quant_group_size))
-
         # Load DiT weights
         dit_weights_path = os.path.join(model_dir, "transformer.safetensors")
         if os.path.exists(dit_weights_path):
-            from safetensors import safe_open
-
-            weights = {}
-            is_quantized = False
-            with safe_open(dit_weights_path, framework="numpy") as f:
-                for key in f.keys():
-                    weights[key] = mx.array(f.get_tensor(key))
-                    if ".scales" in key or ".biases" in key:
-                        is_quantized = True
-
-            if is_quantized:
-                nn.quantize(
-                    transformer,
-                    group_size=quant_group_size,
-                    bits=quant_bits,
-                )
-
+            weights = mx.load(dit_weights_path)
+            if any(key.endswith((".scales", ".biases")) for key in weights):
+                raise ValueError("Quantized DiT weights are unsupported; reconvert in BF16")
             transformer.load_weights(list(weights.items()), strict=False)
-            print(
-                f"  Loaded DiT: {len(weights)} tensors "
-                f"(quantized={is_quantized}, bits={quant_bits if is_quantized else 'n/a'})"
-            )
+            print(f"  Loaded DiT: {len(weights)} tensors (BF16)")
 
         # Load VAE
         vae_weights_path = os.path.join(model_dir, "vae.safetensors")
@@ -135,8 +104,6 @@ class MageFlowPipeline:
         te_weights_path = os.path.join(model_dir, "text_encoder.safetensors")
         text_encoder = Qwen3VLTextEncoder(
             model_path=te_weights_path if os.path.exists(te_weights_path) else None,
-            quantization_bits=text_quant_bits,
-            quantization_group_size=quant_group_size,
         )
         print(f"  Loaded text encoder")
 
@@ -186,8 +153,15 @@ class MageFlowPipeline:
             mx.eval(neg_txt_embeds)
             print(f"  Negative text embeddings: {neg_txt_embeds.shape}")
 
+        # Qwen is only needed for prompt encoding. Releasing its ~8.9 GB BF16
+        # weights leaves ample unified memory for DiT activations at 1024².
+        self.text_encoder.unload()
+        gc.collect()
+        mx.clear_cache()
+        print("  Unloaded text encoder")
+
         # 2. Initialize Gaussian noise in latent space (NHWC)
-        latents = mx.random.normal((1, lat_h, lat_w, 128))
+        latents = mx.random.normal((1, lat_h, lat_w, 128)).astype(mx.bfloat16)
 
         # 3. Flow matching sampling loop
         for i in range(self.num_steps):

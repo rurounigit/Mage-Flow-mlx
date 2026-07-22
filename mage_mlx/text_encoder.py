@@ -20,7 +20,6 @@ import os
 from typing import Any
 
 import mlx.core as mx
-import mlx.nn as nn
 
 # Mage-Flow text encoder config (from microsoft/Mage-Flow-Turbo/text_encoder/config.json)
 MAGE_FLOW_TEXT_CONFIG = {
@@ -72,13 +71,9 @@ class Qwen3VLTextEncoder:
         self,
         model_path: str | None = None,
         hf_repo_id: str = "microsoft/Mage-Flow-Turbo",
-        quantization_bits: int = 4,
-        quantization_group_size: int = 64,
     ):
         self.hf_repo_id = hf_repo_id
         self.model_path = model_path
-        self.quantization_bits = quantization_bits
-        self.quantization_group_size = quantization_group_size
 
         # Lazy-load model and tokenizer
         self._model = None
@@ -105,25 +100,15 @@ class Qwen3VLTextEncoder:
 
     def _load_weights(self) -> None:
         """Load MLX-converted weights into the model."""
-        import numpy as np
-        from safetensors import safe_open
-
-        weights = {}
-        is_quantized = False
-        with safe_open(self.model_path, framework="numpy") as f:
-            for key in f.keys():
-                weights[key] = mx.array(f.get_tensor(key))
-                if ".scales" in key or ".biases" in key:
-                    is_quantized = True
-
-        if is_quantized:
-            nn.quantize(
-                self._model,
-                group_size=self.quantization_group_size,
-                bits=self.quantization_bits,
-            )
-
+        weights = mx.load(self.model_path)
+        if any(key.endswith((".scales", ".biases")) for key in weights):
+            raise ValueError("Quantized text encoders are unsupported; reconvert in BF16")
         self._model.load_weights(list(weights.items()), strict=False)
+
+    def unload(self) -> None:
+        """Release model weights after prompt embeddings have been computed."""
+        self._model = None
+        mx.clear_cache()
 
     def _load_tokenizer(self):
         """Load the Qwen3-VL tokenizer from HuggingFace."""

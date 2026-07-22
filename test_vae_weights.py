@@ -1,15 +1,10 @@
 """Check which VAE weights fail to load (strict=False hides missing weights)."""
 import mlx.core as mx
-import mlx.nn as nn
-from safetensors import safe_open
 from mage_mlx.vae import MageVAE
 
 # Load the VAE weights file
 vae_path = 'models/mage_flow_mlx/vae.safetensors'
-weights = {}
-with safe_open(vae_path, framework="numpy") as f:
-    for key in f.keys():
-        weights[key] = mx.array(f.get_tensor(key))
+weights = mx.load(vae_path)
 
 print(f"Total weights in file: {len(weights)}")
 
