@@ -1,9 +1,9 @@
-"""Convert Mage-Flow PyTorch weights to MLX format with 4-bit quantization (Memory-Efficient Streaming).
+"""Convert Mage-Flow PyTorch weights to MLX format with quantization.
 
 This script:
 1. Downloads weights from HuggingFace (microsoft/Mage-Flow-Turbo)
 2. Converts PyTorch safetensors → MLX format tensor-by-tensor (low RAM usage)
-3. Quantizes DiT transformer + text encoder to 4-bit (group_size=64)
+3. Quantizes DiT transformer + text encoder (8-bit by default, group_size=64)
 4. Saves as MLX safetensors in models/mage_flow_mlx/
 
 Usage:
@@ -31,16 +31,17 @@ def convert_conv2d(arr: np.ndarray) -> np.ndarray:
     PyTorch: [Out, In, H, W] → MLX: [Out, H, W, In]
     """
     if arr.ndim == 4:
-        return arr.transpose(0, 2, 3, 1)
+        # ``transpose`` returns a strided view. MLX/safetensors conversion must
+        # receive contiguous storage or the tensor can retain PyTorch's raw
+        # OIHW memory order while merely advertising an OHWI shape.
+        return np.ascontiguousarray(arr.transpose(0, 2, 3, 1))
     return arr
 
 
 def quantize_single_tensor(key: str, arr: mx.array, quantize: bool = True, bits: int = 4, group_size: int = 64) -> dict[str, mx.array]:
     """Quantize a single tensor if it's 2D Linear weight."""
-    if quantize and arr.ndim == 2 and arr.shape[0] > arr.shape[1]:
+    if quantize and arr.ndim == 2:
         q_w, scales, biases = mx.quantize(arr, group_size=group_size, bits=bits)
-        # Fix MLX key naming convention for QuantizedLinear:
-        # layer.weight -> layer.weight, layer.scales, layer.biases (NOT layer.weight.scales)
         base_key = key[:-7] if key.endswith(".weight") else key
         return {
             f"{base_key}.weight": q_w,
@@ -52,13 +53,16 @@ def quantize_single_tensor(key: str, arr: mx.array, quantize: bool = True, bits:
 
 def process_and_convert_file(
     safetensors_path: str,
+    out_path: str,
     key_mapper_fn,
     quantize: bool = True,
     bits: int = 4,
     group_size: int = 64,
-) -> dict[str, mx.array]:
-    """Streams and converts safetensors one tensor at a time to prevent RAM OOM."""
-    converted = {}
+) -> None:
+    """Streams and converts safetensors directly to disk as NumPy dict to minimize RAM peak."""
+    from safetensors.numpy import save_file
+
+    np_converted = {}
     with safe_open(safetensors_path, framework="pt") as f:
         keys = list(f.keys())
         for key in keys:
@@ -78,23 +82,27 @@ def process_and_convert_file(
             if np_arr.ndim == 4:
                 np_arr = convert_conv2d(np_arr)
 
-            mx_arr = mx.array(np_arr)
-            del np_arr
-
-            # Map key name
             mapped_key = key_mapper_fn(key)
             if mapped_key is None:
+                del np_arr
                 continue
+
+            mx_arr = mx.array(np_arr)
+            del np_arr
 
             # Quantize tensor if applicable
             q_dict = quantize_single_tensor(mapped_key, mx_arr, quantize=quantize, bits=bits, group_size=group_size)
             for k, v in q_dict.items():
                 mx.eval(v)
-                converted[k] = v
+                np_converted[k] = np.array(v)
 
+            del mx_arr
             gc.collect()
 
-    return converted
+    save_file(np_converted, out_path)
+    print(f"  Saved: {out_path} ({os.path.getsize(out_path) / 1e6:.1f} MB)")
+    del np_converted
+    gc.collect()
 
 
 def map_dit_key(key: str) -> str | None:
@@ -102,16 +110,64 @@ def map_dit_key(key: str) -> str | None:
     new_key = new_key.replace(".img_mlp.net.2.", ".img_mlp.fc2.")
     new_key = new_key.replace(".txt_mlp.net.0.proj.", ".txt_mlp.fc1.")
     new_key = new_key.replace(".txt_mlp.net.2.", ".txt_mlp.fc2.")
+    # Map diffusers img_mod.1 / txt_mod.1 to direct img_mod / txt_mod Linear
+    new_key = new_key.replace(".img_mod.1.", ".img_mod.")
+    new_key = new_key.replace(".txt_mod.1.", ".txt_mod.")
     return new_key
+
+
+def map_text_encoder_key(key: str) -> str | None:
+    """Map Hugging Face Qwen3-VL text keys to mlx-lm's module tree."""
+    if "vision_tower" in key or "visual" in key:
+        return None
+    if key.startswith("model.language_model."):
+        return "language_model.model." + key[len("model.language_model."):]
+    if key.startswith("language_model."):
+        return key
+    return "language_model." + key
 
 
 def map_vae_key(key: str) -> str | None:
     if "y_embedder.encoder." in key or "y_embedder.bottleneck." in key:
         return None
+
+    # Map nn.Sequential sub-layers to .layers.N
+    key = key.replace(".t_embedder.mlp.0.", ".t_embedder.mlp.layers.0.")
+    key = key.replace(".t_embedder.mlp.2.", ".t_embedder.mlp.layers.2.")
+    key = key.replace(".ca.1.", ".ca.layers.1.")
+    key = key.replace(".adaLN_modulation.1.", ".adaLN_modulation.layers.1.")
+    key = key.replace(".mlp.0.", ".mlp.layers.0.")
+    key = key.replace(".mlp.2.", ".mlp.layers.2.")
+    key = key.replace(".x_embedder.embedder.0.", ".x_embedder.embedder.")
+
+    # Fix GroupNorm (Normalize) inside CoD Decoder ResnetBlock/AttnBlock
+    key = key.replace(".decoder.block.0.norm1.", ".decoder.block.layers.0.norm1.norm.")
+    key = key.replace(".decoder.block.0.norm2.", ".decoder.block.layers.0.norm2.norm.")
+    key = key.replace(".decoder.block.1.norm.", ".decoder.block.layers.1.norm.norm.")
+    key = key.replace(".decoder.block.2.norm1.", ".decoder.block.layers.2.norm1.norm.")
+    key = key.replace(".decoder.block.2.norm2.", ".decoder.block.layers.2.norm2.norm.")
+    key = key.replace(".decoder.block.3.norm.", ".decoder.block.layers.3.norm.norm.")
+    key = key.replace(".decoder.block.4.norm1.", ".decoder.block.layers.4.norm1.norm.")
+    key = key.replace(".decoder.block.4.norm2.", ".decoder.block.layers.4.norm2.norm.")
+
+    # Remaining CoD Decoder Sequential blocks
+    key = key.replace(".decoder.block.0.", ".decoder.block.layers.0.")
+    key = key.replace(".decoder.block.1.", ".decoder.block.layers.1.")
+    key = key.replace(".decoder.block.2.", ".decoder.block.layers.2.")
+    key = key.replace(".decoder.block.3.", ".decoder.block.layers.3.")
+    key = key.replace(".decoder.block.4.", ".decoder.block.layers.4.")
+
+
+    # Fix LayerNorm2d (head_blocks) and Normalize (norm_out) wrapper keys
+    key = key.replace(".head_blocks.0.norm1.", ".head_blocks.0.norm1.norm.")
+    key = key.replace(".head_blocks.0.norm2.", ".head_blocks.0.norm2.norm.")
+    key = key.replace(".head_blocks.1.norm1.", ".head_blocks.1.norm1.norm.")
+    key = key.replace(".head_blocks.1.norm2.", ".head_blocks.1.norm2.norm.")
+    key = key.replace(".norm_out.", ".norm_out.norm.")
     if key.startswith("student.dconv_encoder."):
-        return key[len("student.dconv_encoder."):]
+        return "dconv_encoder." + key[len("student.dconv_encoder."):]
     if key.startswith("pipeline."):
-        return key[len("pipeline."):]
+        return "decoder_model." + key[len("pipeline."):]
     return key
 
 
@@ -152,8 +208,8 @@ def main():
     parser = argparse.ArgumentParser(description="Convert Mage-Flow PyTorch weights to MLX (Low Memory)")
     parser.add_argument("--repo", default="microsoft/Mage-Flow-Turbo", help="HuggingFace repo ID")
     parser.add_argument("--output", default="models/mage_flow_mlx", help="Output directory")
-    parser.add_argument("--quantize", action="store_true", default=True, help="Quantize to 4-bit")
-    parser.add_argument("--bits", type=int, default=4, help="Quantization bits (4 or 8)")
+    parser.add_argument("--quantize", action="store_true", default=True, help="Quantize model weights")
+    parser.add_argument("--bits", type=int, default=8, choices=(4, 8), help="Quantization bits; 8 is recommended for image quality")
     args = parser.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
@@ -164,36 +220,42 @@ def main():
     # 1. DiT weights
     print("\nConverting DiT weights (low RAM streaming)...")
     dit_path = os.path.join(repo_dir, "transformer", "diffusion_pytorch_model.safetensors")
-    mlx_dit = process_and_convert_file(
+    process_and_convert_file(
         dit_path,
+        os.path.join(args.output, "transformer.safetensors"),
         key_mapper_fn=map_dit_key,
         quantize=args.quantize,
         bits=args.bits,
     )
-    save_mlx_safetensors(mlx_dit, os.path.join(args.output, "transformer.safetensors"))
-    del mlx_dit
-    gc.collect()
 
     # Save DiT config
     with open(os.path.join(repo_dir, "transformer", "config.json")) as f:
         dit_config = json.load(f)
     with open(os.path.join(args.output, "transformer_config.json"), "w") as f:
         json.dump(dit_config, f, indent=2)
+    with open(os.path.join(args.output, "quantization_config.json"), "w") as f:
+        json.dump(
+            {
+                "transformer_bits": args.bits,
+                "text_encoder_bits": args.bits,
+                "group_size": 64,
+            },
+            f,
+            indent=2,
+        )
 
     # 2. VAE weights
     print("\nConverting VAE weights...")
     vae_path = os.path.join(repo_dir, "vae", "diffusion_pytorch_model.safetensors")
-    mlx_vae = process_and_convert_file(
+    process_and_convert_file(
         vae_path,
+        os.path.join(args.output, "vae.safetensors"),
         key_mapper_fn=map_vae_key,
         quantize=False,  # VAE kept in FP32/FP16
     )
-    save_mlx_safetensors(mlx_vae, os.path.join(args.output, "vae.safetensors"))
-    del mlx_vae
-    gc.collect()
 
     # 3. Text Encoder weights
-    print("\nConverting Text Encoder weights (streaming)...")
+    print("\nConverting Text Encoder weights (streaming shard by shard)...")
     te_dir = os.path.join(repo_dir, "text_encoder")
     mlx_te = {}
     for shard in sorted(os.listdir(te_dir)):
@@ -209,18 +271,25 @@ def main():
                     np_arr = t.numpy()
                     del t
 
-                    mapped_key = key if key.startswith("language_model.") else f"language_model.{key}"
+                    mapped_key = map_text_encoder_key(key)
+                    if mapped_key is None:
+                        continue
                     mx_arr = mx.array(np_arr)
                     del np_arr
 
                     q_dict = quantize_single_tensor(mapped_key, mx_arr, quantize=args.quantize, bits=args.bits)
                     for k, v in q_dict.items():
                         mx.eval(v)
-                        mlx_te[k] = v
+                        # Save numpy array directly to dict
+                        mlx_te[k] = np.array(v)
 
                     gc.collect()
 
-    save_mlx_safetensors(mlx_te, os.path.join(args.output, "text_encoder.safetensors"))
+    # Save safetensors directly from numpy dict
+    from safetensors.numpy import save_file
+    te_out_path = os.path.join(args.output, "text_encoder.safetensors")
+    save_file(mlx_te, te_out_path)
+    print(f"  Saved: {te_out_path} ({os.path.getsize(te_out_path) / 1e6:.1f} MB)")
     del mlx_te
     gc.collect()
 

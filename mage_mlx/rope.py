@@ -101,7 +101,10 @@ class MageFlowEmbedRope(nn.Module):
 
         # Precompute pos/neg frequency tables (as angle values, not complex)
         pos_index = mx.arange(4096, dtype=mx.float32)
-        neg_index = mx.arange(4096, dtype=mx.float32) * -1.0 - 1.0
+        # Match ``torch.arange(4096).flip(0) * -1 - 1`` exactly. The tail of
+        # this table must contain [..., -2, -1] because symmetric RoPE slices
+        # from the end for spatial positions near the origin.
+        neg_index = mx.arange(4095, -1, -1, dtype=mx.float32) * -1.0 - 1.0
 
         self.pos_freqs = mx.concat(
             [

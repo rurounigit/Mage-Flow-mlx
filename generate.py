@@ -27,8 +27,8 @@ def main():
         help="Text prompt for image generation"
     )
     parser.add_argument(
-        "--model", type=str, default="models/mage_flow_mlx",
-        help="Path to MLX model directory"
+        "--model", type=str, default=None,
+        help="Path to MLX model directory (defaults to the available 8-bit model)"
     )
     parser.add_argument(
         "--steps", type=int, default=4,
@@ -47,10 +47,24 @@ def main():
         help="Random seed"
     )
     parser.add_argument(
+        "--guidance", type=float, default=5.0,
+        help="Classifier-free guidance scale (1 disables CFG)"
+    )
+    parser.add_argument(
+        "--negative-prompt", type=str, default=" ",
+        help="Negative prompt used by CFG"
+    )
+    parser.add_argument(
         "--output", type=str, default="output.png",
         help="Output image path"
     )
     args = parser.parse_args()
+
+    # Prefer the validated quality-preserving checkpoint when both the legacy
+    # 4-bit conversion and the newer 8-bit conversion exist locally.
+    if args.model is None:
+        preferred = "models/mage_flow_mlx_8bit"
+        args.model = preferred if os.path.exists(preferred) else "models/mage_flow_mlx"
 
     # Validate dimensions
     if args.height % 16 != 0 or args.width % 16 != 0:
@@ -82,6 +96,8 @@ def main():
         height=args.height,
         width=args.width,
         seed=args.seed,
+        guidance_scale=args.guidance,
+        negative_prompt=args.negative_prompt,
     )
 
     # Save

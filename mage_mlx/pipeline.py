@@ -87,6 +87,19 @@ class MageFlowPipeline:
         )
         transformer = MageFlow(params)
 
+        quant_config_path = os.path.join(model_dir, "quantization_config.json")
+        quant_bits = 4
+        text_quant_bits = 4
+        quant_group_size = 64
+        if os.path.exists(quant_config_path):
+            with open(quant_config_path) as f:
+                quant_config = json.load(f)
+            quant_bits = int(quant_config.get("transformer_bits", quant_bits))
+            text_quant_bits = int(
+                quant_config.get("text_encoder_bits", text_quant_bits)
+            )
+            quant_group_size = int(quant_config.get("group_size", quant_group_size))
+
         # Load DiT weights
         dit_weights_path = os.path.join(model_dir, "transformer.safetensors")
         if os.path.exists(dit_weights_path):
@@ -101,10 +114,17 @@ class MageFlowPipeline:
                         is_quantized = True
 
             if is_quantized:
-                nn.quantize(transformer, group_size=64, bits=4)
+                nn.quantize(
+                    transformer,
+                    group_size=quant_group_size,
+                    bits=quant_bits,
+                )
 
-            transformer.load_weights(list(weights.items()))
-            print(f"  Loaded DiT: {len(weights)} tensors (quantized={is_quantized})")
+            transformer.load_weights(list(weights.items()), strict=False)
+            print(
+                f"  Loaded DiT: {len(weights)} tensors "
+                f"(quantized={is_quantized}, bits={quant_bits if is_quantized else 'n/a'})"
+            )
 
         # Load VAE
         vae_weights_path = os.path.join(model_dir, "vae.safetensors")
@@ -115,6 +135,8 @@ class MageFlowPipeline:
         te_weights_path = os.path.join(model_dir, "text_encoder.safetensors")
         text_encoder = Qwen3VLTextEncoder(
             model_path=te_weights_path if os.path.exists(te_weights_path) else None,
+            quantization_bits=text_quant_bits,
+            quantization_group_size=quant_group_size,
         )
         print(f"  Loaded text encoder")
 
@@ -126,6 +148,8 @@ class MageFlowPipeline:
         height: int = 1024,
         width: int = 1024,
         seed: int = 42,
+        guidance_scale: float = 5.0,
+        negative_prompt: str = " ",
     ) -> Image.Image:
         """Generate an image from a text prompt.
 
@@ -134,10 +158,17 @@ class MageFlowPipeline:
             height: Output image height (must be multiple of 16)
             width: Output image width (must be multiple of 16)
             seed: Random seed for reproducibility
+            guidance_scale: Classifier-free guidance scale; 1 disables CFG
+            negative_prompt: Prompt for the unconditional CFG branch
 
         Returns:
             PIL Image
         """
+        if height <= 0 or width <= 0 or height % 16 or width % 16:
+            raise ValueError("height and width must be positive multiples of 16")
+        if guidance_scale < 1.0:
+            raise ValueError("guidance_scale must be at least 1.0")
+
         mx.random.seed(seed)
 
         # Latent grid size (16x downsample)
@@ -149,6 +180,12 @@ class MageFlowPipeline:
         mx.eval(txt_embeds)
         print(f"  Text embeddings: {txt_embeds.shape}")
 
+        neg_txt_embeds = None
+        if guidance_scale > 1.0:
+            neg_txt_embeds = self.text_encoder(negative_prompt)
+            mx.eval(neg_txt_embeds)
+            print(f"  Negative text embeddings: {neg_txt_embeds.shape}")
+
         # 2. Initialize Gaussian noise in latent space (NHWC)
         latents = mx.random.normal((1, lat_h, lat_w, 128))
 
@@ -159,7 +196,8 @@ class MageFlowPipeline:
             # Reshape latent to sequence: [1, H*W, 128]
             latents_seq = latents.reshape(1, -1, 128)
 
-            # Timestep embedding
+            # MageFlowTimestepProjEmbeddings applies its own scale=1000, so the
+            # transformer receives the normalized flow sigma, not sigma*1000.
             t_batch = mx.array([float(sigma)])
 
             # Run through DiT
@@ -169,6 +207,17 @@ class MageFlowPipeline:
                 timesteps=t_batch,
                 img_shapes=(1, lat_h, lat_w),
             )
+
+            if neg_txt_embeds is not None:
+                v_uncond_seq = self.transformer(
+                    img=latents_seq,
+                    txt=neg_txt_embeds,
+                    timesteps=t_batch,
+                    img_shapes=(1, lat_h, lat_w),
+                )
+                v_pred_seq = v_uncond_seq + guidance_scale * (
+                    v_pred_seq - v_uncond_seq
+                )
 
             # Reshape velocity prediction back to NHWC
             v_pred = v_pred_seq.reshape(1, lat_h, lat_w, 128)

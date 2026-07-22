@@ -41,7 +41,7 @@ class RMSNorm(nn.Module):
     def __call__(self, x: mx.array) -> mx.array:
         in_dtype = x.dtype
         x = x.astype(mx.float32)
-        var = x.pow(2).mean(-1, keepdims=True)
+        var = mx.square(x).mean(-1, keepdims=True)
         x = x * mx.rsqrt(var + self.variance_epsilon)
         return self.weight * x.astype(in_dtype)
 
@@ -51,18 +51,23 @@ class LayerNorm2d(nn.Module):
 
     def __init__(self, num_channels: int, eps: float = 1e-6, affine: bool = True):
         super().__init__()
-        self.normalized_shape = num_channels
-        self.eps = eps
-        self.elementwise_affine = affine
-        if affine:
-            self.weight = mx.ones((num_channels,))
-            self.bias = mx.zeros((num_channels,))
+        self.norm = nn.LayerNorm(num_channels, eps=eps, affine=affine)
 
     def __call__(self, x: mx.array) -> mx.array:
         # x: [B, H, W, C] (NHWC)
-        weight = self.weight if self.elementwise_affine else None
-        bias = self.bias if self.elementwise_affine else None
-        return nn.layer_norm(x, self.normalized_shape, weight, bias, self.eps)
+        return self.norm(x)
+
+
+class AdaptiveAvgPool2d(nn.Module):
+    """Global spatial average pooling for NHWC tensors."""
+
+    def __init__(self, output_size: int = 1):
+        super().__init__()
+        self.output_size = output_size
+
+    def __call__(self, x: mx.array) -> mx.array:
+        # x shape: [B, H, W, C] (NHWC)
+        return mx.mean(x, axis=(1, 2), keepdims=True)
 
 
 class Normalize(nn.Module):
@@ -71,10 +76,11 @@ class Normalize(nn.Module):
     def __init__(self, in_channels: int, num_groups: int = 32, eps: float = 1e-6):
         super().__init__()
         self.norm = nn.GroupNorm(
+            dims=in_channels,
             num_groups=num_groups,
-            num_channels=in_channels,
             eps=eps,
             affine=True,
+            pytorch_compatible=True,
         )
 
     def __call__(self, x: mx.array) -> mx.array:
@@ -82,11 +88,13 @@ class Normalize(nn.Module):
 
 
 def modulate(x: mx.array, shift: mx.array, scale: mx.array) -> mx.array:
-    """Adaptive modulation: x * (1 + scale) + shift"""
+    """Adaptive modulation: x * (1 + scale) + shift (NHWC layout: channels at axis=-1)."""
     if x.ndim == 4:
-        b, c = x.shape[:2]
-        return x * (1 + scale.reshape(b, c, 1, 1)) + shift.reshape(b, c, 1, 1)
-    return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+        # NHWC layout: x shape [B, H, W, C]
+        b = x.shape[0]
+        c = x.shape[-1]
+        return x * (1 + scale.reshape(b, 1, 1, c)) + shift.reshape(b, 1, 1, c)
+    return x * (1 + scale[:, None, :]) + shift[:, None, :]
 
 
 class TimestepEmbedder(nn.Module):
@@ -121,10 +129,10 @@ class TimestepEmbedder(nn.Module):
 class BottleneckPatchEmbed(nn.Module):
     """Image patch embed concatenated with a per-patch conditioning vector."""
 
-    def __init__(self, patch_size: int = 16, in_chans: int = 3, pca_dim: int = 128, embed_dim: int = 384):
+    def __init__(self, patch_size: int = 16, in_chans: int = 3, pca_dim: int = 128, embed_dim: int = 384, bias: bool = True):
         super().__init__()
         self.proj1 = nn.Conv2d(in_chans, pca_dim, kernel_size=patch_size, stride=patch_size, bias=False)
-        self.proj2 = nn.Conv2d(pca_dim + embed_dim, embed_dim, kernel_size=1, bias=True)
+        self.proj2 = nn.Conv2d(pca_dim + embed_dim, embed_dim, kernel_size=1, bias=bias)
 
     def __call__(self, x: mx.array, cond: mx.array) -> mx.array:
         return self.proj2(mx.concat([self.proj1(x), cond], axis=-1))
@@ -140,7 +148,7 @@ class DiCoBlock(nn.Module):
         self.conv3 = nn.Conv2d(hidden_size, hidden_size, 1, bias=True)
 
         self.ca = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
+            AdaptiveAvgPool2d(1),
             nn.Conv2d(hidden_size, hidden_size, 1, bias=True),
             nn.Sigmoid(),
         )
@@ -162,12 +170,14 @@ class DiCoBlock(nn.Module):
             self.adaLN_modulation(c).split(6, axis=-1)
         )
         x = modulate(self.norm1(inp), shift_msa, scale_msa)
-        x = nonlinearity(self.conv2(self.conv1(x)))
+        # The reference DConv uses GELU here, not the SiLU used by the CoD
+        # decoder's ResNet blocks.
+        x = nn.gelu(self.conv2(self.conv1(x)))
         x = x * self.ca(x)
         x = self.conv3(x)
-        x = inp + gate_msa[..., None, None] * x
-        x = x + gate_mlp[..., None, None] * self.conv5(
-            nonlinearity(self.conv4(modulate(self.norm2(x), shift_mlp, scale_mlp)))
+        x = inp + gate_msa[:, None, None, :] * x
+        x = x + gate_mlp[:, None, None, :] * self.conv5(
+            nn.gelu(self.conv4(modulate(self.norm2(x), shift_mlp, scale_mlp)))
         )
         return x
 
@@ -181,23 +191,23 @@ class _EncoderDiCoBlock(nn.Module):
         self.conv2 = nn.Conv2d(hidden_size, hidden_size, 3, padding=1, groups=hidden_size, bias=True)
         self.conv3 = nn.Conv2d(hidden_size, hidden_size, 1, bias=True)
         self.ca = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
+            AdaptiveAvgPool2d(1),
             nn.Conv2d(hidden_size, hidden_size, 1, bias=True),
             nn.Sigmoid(),
         )
         ffn = int(mlp_ratio * hidden_size)
         self.conv4 = nn.Conv2d(hidden_size, ffn, 1, bias=True)
         self.conv5 = nn.Conv2d(ffn, hidden_size, 1, bias=True)
-        self.norm1 = LayerNorm2d(hidden_size)
-        self.norm2 = LayerNorm2d(hidden_size)
+        self.norm1 = LayerNorm2d(hidden_size, affine=True)
+        self.norm2 = LayerNorm2d(hidden_size, affine=True)
 
     def __call__(self, inp: mx.array) -> mx.array:
         x = self.norm1(inp)
-        x = nonlinearity(self.conv2(self.conv1(x)))
+        x = nn.gelu(self.conv2(self.conv1(x)))
         x = x * self.ca(x)
         x = self.conv3(x)
         x = inp + x
-        return x + self.conv5(nonlinearity(self.conv4(self.norm2(x))))
+        return x + self.conv5(nn.gelu(self.conv4(self.norm2(x))))
 
 
 class NerfEmbedder(nn.Module):
@@ -208,24 +218,25 @@ class NerfEmbedder(nn.Module):
         self.max_freqs = max_freqs
         self.embedder = nn.Linear(in_channels + max_freqs ** 2, hidden_size_input, bias=True)
 
+    @staticmethod
     @lru_cache(maxsize=128)
-    def fetch_pos(self, patch_size: int, dtype: str) -> mx.array:
-        pos = mx.linspace(0, 1, patch_size, dtype=dtype)
+    def fetch_pos(patch_size: int, max_freqs: int = 8) -> mx.array:
+        pos = mx.linspace(0, 1, patch_size, dtype=mx.float32)
         pos_y, pos_x = mx.meshgrid(pos, pos, indexing="ij")
         pos_x = pos_x.reshape(-1, 1, 1)
         pos_y = pos_y.reshape(-1, 1, 1)
-        freqs = mx.linspace(0, self.max_freqs, self.max_freqs, dtype=dtype)
+        freqs = mx.linspace(0, max_freqs, max_freqs, dtype=mx.float32)
         fx = freqs[None, :, None]
         fy = freqs[None, None, :]
         coeffs = (1 + fx * fy) ** -1
         dct_x = mx.cos(pos_x * fx * math.pi)
         dct_y = mx.cos(pos_y * fy * math.pi)
-        return (dct_x * dct_y * coeffs).reshape(1, -1, self.max_freqs ** 2)
+        return (dct_x * dct_y * coeffs).reshape(1, -1, max_freqs ** 2)
 
     def __call__(self, x: mx.array) -> mx.array:
         B, P2, _ = x.shape
         ps = int(P2 ** 0.5)
-        dct = self.fetch_pos(ps, x.dtype).broadcast_to(B, -1, -1)
+        dct = mx.broadcast_to(self.fetch_pos(ps, self.max_freqs).astype(x.dtype), (B, ps * ps, self.max_freqs ** 2))
         return self.embedder(mx.concat([x, dct], axis=-1))
 
 
@@ -334,9 +345,10 @@ class AttnBlock(nn.Module):
         pad_h = (d - H % d) % d
         pad_w = (d - W % d) % d
         if pad_h or pad_w:
-            Q = mx.pad(Q, [(0, 0), (0, pad_w), (0, pad_h), (0, 0)])
-            K = mx.pad(K, [(0, 0), (0, pad_w), (0, pad_h), (0, 0)])
-            V = mx.pad(V, [(0, 0), (0, pad_w), (0, pad_h), (0, 0)])
+            pad_width = [(0, 0), (0, pad_h), (0, pad_w), (0, 0)]
+            Q = mx.pad(Q, pad_width, mode="edge")
+            K = mx.pad(K, pad_width, mode="edge")
+            V = mx.pad(V, pad_width, mode="edge")
         _, H_pad, W_pad, _ = Q.shape
         nph, npw = H_pad // d, W_pad // d
         np_ = nph * npw
@@ -352,8 +364,10 @@ class AttnBlock(nn.Module):
         V = to_patches(V)
 
         w_ = mx.softmax(mx.matmul(Q.transpose(0, 2, 1), K) * (c ** -0.5), axis=2)
+        # PyTorch reference applies softmax and then permutes the last two
+        # dimensions before multiplying V.
         h_ = mx.matmul(V, w_.transpose(0, 2, 1))
-        h_ = h_.reshape(b, nph, npw, c, d, d).transpose(0, 3, 1, 4, 2, 5).reshape(b, H_pad, W_pad, c)
+        h_ = h_.reshape(b, nph, npw, c, d, d).transpose(0, 1, 4, 2, 5, 3).reshape(b, H_pad, W_pad, c)
         if pad_h or pad_w:
             h_ = h_[:, :H, :W, :]
         return x + self.proj_out(h_)
@@ -453,6 +467,7 @@ class _DConvDenoiser(nn.Module):
         self.in_channels = in_channels
         self.patch_size = patch_size
         self.hidden_size = hidden_size
+        self.hidden_size_x = hidden_size_x
         self.num_cond_blocks = num_cond_blocks
 
         self.t_embedder = TimestepEmbedder(hidden_size)
@@ -472,31 +487,50 @@ class _DConvDenoiser(nn.Module):
         self.y_embedder = _YEmbedder(ch=hidden_size, z_ch=bottleneck_dim)
 
     def __call__(self, x: mx.array, t: mx.array, cond: mx.array) -> mx.array:
-        b, _, h, w = x.shape  # NHWC: b, h, w, c
-        b, h, w, _ = x.shape
+        b, h, w, ch = x.shape
         c = self.t_embedder(t.reshape(-1))
 
         s = self.s_embedder(x, cond)
         for block in self.blocks:
             s = block(s, c)
 
-        length = s.shape[-2] * s.shape[-1]
-        s = s.reshape(-1, self.hidden_size)
+        # s shape: [B, H_p, W_p, C_s]
+        h_p, w_p = s.shape[1], s.shape[2]
+        length = h_p * w_p
+        s_flat = s.reshape(-1, self.hidden_size)
 
-        # Unfold x to patches
-        x = x.transpose(0, 3, 1, 2)  # NHWC → NCHW for unfold
-        x = mx.unfold(x, kernel_size=self.patch_size, stride=self.patch_size)
-        x = mx.concat([x, self.y_embedder_x(cond).reshape(b, -1, length)], axis=1)
-        x = x.reshape(b, -1, self.patch_size ** 2, length).transpose(0, 3, 2, 1).reshape(-1, length, self.patch_size ** 2)
-        x = self.x_embedder(x)
+        ps = self.patch_size
 
-        x = self.dec_net(x, s)
-        x = self.final_layer(x)
-        x = x.transpose(1, 2).reshape(b, length, -1)
-        x = x.transpose(1, 2)
-        # Fold back to image
-        x = mx.fold(x, (h, w), kernel_size=self.patch_size, stride=self.patch_size)
-        return x.transpose(0, 2, 3, 1)  # NCHW → NHWC
+        # Patchify x: [B, H, W, Ch] → [B, H_p, ps, W_p, ps, Ch] → [B*length, ps*ps, Ch]
+        x_patches = x.reshape(b, h_p, ps, w_p, ps, ch)
+        x_patches = x_patches.transpose(0, 1, 3, 2, 4, 5)  # [B, H_p, W_p, ps, ps, Ch]
+        x_patches = x_patches.reshape(b * length, ps * ps, ch)
+
+        # Project cond. PyTorch emits channels in
+        # [hidden_size_x, patch_position] order before unfold/reshape, so keep
+        # that ordering here and then transpose to [patch_position, feature].
+        y_cond = self.y_embedder_x(cond)  # [B, H_p, W_p, hidden_size_x * ps^2]
+        y_cond = y_cond.reshape(b, h_p, w_p, self.hidden_size_x, ps * ps)
+        y_cond = y_cond.transpose(0, 1, 2, 4, 3)
+        y_cond = y_cond.reshape(b * length, ps * ps, self.hidden_size_x)
+
+        # Concat image patches and conditioning: [B*length, ps*ps, Ch + hidden_size_x]
+        x_fused = mx.concat([x_patches, y_cond], axis=-1)
+
+        # NerfEmbedder: [B*length, ps*ps, Ch + hidden_size_x] → [B*length, ps*ps, hidden_size_x]
+        x_fused = self.x_embedder(x_fused)
+
+        # SimpleMLPAdaLN: x=[B*length, ps*ps, hidden_size_x], c=[B*length, hidden_size]
+        out = self.dec_net(x_fused, s_flat)
+
+        # Final layer: [B*length, ps*ps, hidden_size_x] → [B*length, ps*ps, Ch]
+        out = self.final_layer(out)
+
+        # Unpatchify: [B*length, ps*ps, Ch] → [B, H, W, Ch]
+        out = out.reshape(b, h_p, w_p, ps, ps, ch)
+        out = out.transpose(0, 1, 3, 2, 4, 5)  # [B, H_p, ps, W_p, ps, Ch]
+        out = out.reshape(b, h, w, ch)
+        return out
 
 
 # ---------------------------------------------------------------------------
@@ -527,62 +561,18 @@ class MageVAE(nn.Module):
         """Load encoder and decoder weights from safetensors."""
         from safetensors import safe_open
 
-        sd = {}
+        weights = {}
         with safe_open(ckpt_path, framework="numpy") as f:
             for key in f.keys():
-                sd[key] = f.get_tensor(key)
+                weights[key] = mx.array(f.get_tensor(key))
 
-        # Load encoder: prefix "student.dconv_encoder."
-        prefix = "student.dconv_encoder."
-        enc_sd = {k[len(prefix):]: v for k, v in sd.items() if k.startswith(prefix)}
-        if not enc_sd:
-            raise RuntimeError(f"No '{prefix}*' keys found in {ckpt_path}")
-
-        # Load decoder: prefix "pipeline."
-        dec_prefix = "pipeline."
-        dec_sd = {}
-        for k, v in sd.items():
-            if not k.startswith(dec_prefix):
-                continue
-            new_k = k[len(dec_prefix):]
-            # Skip y_embedder.encoder/bottleneck (not in our model)
-            if new_k.startswith("y_embedder.encoder.") or new_k.startswith("y_embedder.bottleneck."):
-                continue
-            dec_sd[new_k] = v
-
-        # Load weights (best-effort, strict=False)
-        self._load_state_dict_best_effort(enc_sd, "encoder")
-        self._load_state_dict_best_effort(dec_sd, "decoder")
-
-    def _load_state_dict_best_effort(self, sd: dict, name: str) -> None:
-        """Load state dict with best-effort matching."""
-        # Flatten the module hierarchy and match keys
-        model_sd = {}
-        for path, param in self._named_parameters():
-            model_sd[path] = param
-
-        matched = 0
-        for k, v in sd.items():
-            if k in model_sd:
-                # Handle shape mismatches (e.g., conv weight layout)
-                if len(v.shape) == 4:
-                    # PyTorch: [O, I, H, W] → MLX: [O, H, W, I]
-                    v = v.transpose(0, 2, 3, 1)
-                if v.shape == model_sd[k].shape:
-                    model_sd[k] = mx.array(v)
-                    matched += 1
-
-        # Update model parameters
-        for path, param in self._named_parameters():
-            if path in model_sd:
-                param.update(model_sd[path])
-
-        print(f"  {name}: loaded {matched}/{len(sd)} params")
+        self.load_weights(list(weights.items()), strict=False)
+        print(f"  Loaded VAE: {len(weights)} tensors")
 
     def _named_parameters(self):
         """Yield (path, param) tuples for all parameters."""
-        for path, param in self.parameters():
-            yield path, param
+        from mlx.utils import tree_flatten
+        return list(tree_flatten(self.parameters()))
 
     def _freeze_adaln_cache(self) -> None:
         """Constant-fold adaLN_modulation MLPs at t=0."""
@@ -611,7 +601,7 @@ class MageVAE(nn.Module):
         t = mx.zeros((x.shape[0],), dtype=x.dtype)
         out = self.dconv_encoder.forward_pred(z_t, t, x)
         mean = out[..., :self.latent_channels]
-        logvar = out[..., self.latent_channels:].clip(-20.0, 10.0)
+        logvar = mx.clip(out[..., self.latent_channels:], -20.0, 10.0)
 
         if self.sample_posterior:
             return mean + mx.exp(0.5 * logvar) * mx.random.normal(mean.shape)

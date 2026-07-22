@@ -3,12 +3,12 @@
 Port of diffusers' FlowMatchEulerDiscreteScheduler with static shift=6.0,
 following the mflux MLX pattern.
 
-The scheduler computes sigmas using a static exponential time-shift:
-  sigma = exp(mu) / (exp(mu) + (1/t - 1)^sigma_power)
+The scheduler computes sigmas using diffusers' static rational shift:
+  sigma = shift * t / (1 + (shift - 1) * t)
 
 For Mage-Flow-Turbo (4-step distilled), the schedule is:
   base_sigmas = linspace(1.0, 1/4, 4)
-  shifted = time_shift(mu=1.0, sigma_power=1.0, base_sigmas)
+  shifted = shift * base_sigmas / (1 + (shift - 1) * base_sigmas)
   sigmas = [shifted..., 0.0]  (append terminal 0)
 """
 
@@ -59,16 +59,9 @@ class FlowMatchEulerDiscreteScheduler:
         return self._timesteps
 
     @staticmethod
-    def _time_shift_exponential(mu: float, sigma_power: float, t: float) -> float:
-        """Static exponential time-shift: exp(mu) / (exp(mu) + (1/t - 1)^sigma_power)"""
-        return math.exp(mu) / (math.exp(mu) + ((1.0 / t - 1.0) ** sigma_power))
-
-    @staticmethod
-    def _time_shift_exponential_array(
-        mu: float, sigma_power: float, t: mx.array
-    ) -> mx.array:
-        """Vectorized version of _time_shift_exponential."""
-        return mx.exp(mu) / (mx.exp(mu) + ((1.0 / t - 1.0) ** sigma_power))
+    def _time_shift(shift: float, t: mx.array) -> mx.array:
+        """Diffusers static flow shift."""
+        return shift * t / (1.0 + (shift - 1.0) * t)
 
     def _compute_timesteps_and_sigmas(
         self, num_steps: int
@@ -77,7 +70,7 @@ class FlowMatchEulerDiscreteScheduler:
 
         Mirrors the diffusers FlowMatchEulerDiscreteScheduler with static shift:
         1. Linear sigmas: linspace(1, 1/num_steps, num_steps)
-        2. Apply static exponential time-shift with mu=shift, sigma_power=1.0
+        2. Apply the static rational time-shift
         3. Append terminal 0 to sigmas
         4. Timesteps = sigmas * num_train_timesteps
         """
@@ -86,10 +79,7 @@ class FlowMatchEulerDiscreteScheduler:
             1.0, 1.0 / num_steps, num_steps, dtype=mx.float32
         )
 
-        # Apply static time-shift (mu=shift, sigma_power=1.0)
-        sigmas_shifted = self._time_shift_exponential_array(
-            self.shift, 1.0, sigmas_linear
-        )
+        sigmas_shifted = self._time_shift(self.shift, sigmas_linear)
 
         # Timesteps = sigmas * num_train_timesteps
         timesteps = sigmas_shifted * self.num_train_timesteps

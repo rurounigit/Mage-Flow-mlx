@@ -116,11 +116,12 @@ class Attention(nn.Module):
         self.add_v_proj = nn.Linear(self.cross_attention_dim, self.inner_kv_dim, bias=bias)
         self.to_add_out = nn.Linear(self.inner_dim, self.out_context_dim, bias=bias)
 
-        # QK normalization
-        self.norm_q = nn.LayerNorm(dim_head, eps=eps)
-        self.norm_k = nn.LayerNorm(dim_head, eps=eps)
-        self.norm_added_q = nn.LayerNorm(dim_head, eps=eps)
-        self.norm_added_k = nn.LayerNorm(dim_head, eps=eps)
+        # MageFlow uses per-head RMSNorm for Q/K (not LayerNorm). Subtracting
+        # the mean here changes every attention logit and destroys the model.
+        self.norm_q = RMSNorm(dim_head, eps=eps)
+        self.norm_k = RMSNorm(dim_head, eps=eps)
+        self.norm_added_q = RMSNorm(dim_head, eps=eps)
+        self.norm_added_k = RMSNorm(dim_head, eps=eps)
 
     def __call__(
         self,
@@ -244,10 +245,7 @@ class MageFlowTransformerBlock(nn.Module):
         self.head_dim = head_dim
 
         # Image processing
-        self.img_mod = nn.Sequential(
-            nn.SiLU(),
-            nn.Linear(dim, 6 * dim),
-        )
+        self.img_mod = nn.Linear(dim, 6 * dim)
         self.img_norm1 = nn.LayerNorm(dim, eps=eps, affine=False)
         self.attn = Attention(
             query_dim=dim,
@@ -263,10 +261,7 @@ class MageFlowTransformerBlock(nn.Module):
         self.img_mlp = FeedForward(dim=dim, dim_out=dim)
 
         # Text processing
-        self.txt_mod = nn.Sequential(
-            nn.SiLU(),
-            nn.Linear(dim, 6 * dim),
-        )
+        self.txt_mod = nn.Linear(dim, 6 * dim)
         self.txt_norm1 = nn.LayerNorm(dim, eps=eps, affine=False)
         self.txt_norm2 = nn.LayerNorm(dim, eps=eps, affine=False)
         self.txt_mlp = FeedForward(dim=dim, dim_out=dim)
@@ -296,8 +291,8 @@ class MageFlowTransformerBlock(nn.Module):
             (img_output, txt_output)
         """
         # Modulation parameters
-        img_mod = self.img_mod(temb)
-        txt_mod = self.txt_mod(temb)
+        img_mod = self.img_mod(nn.silu(temb))
+        txt_mod = self.txt_mod(nn.silu(temb))
 
         # Split into norm1 and norm2 modulations
         img_mod1, img_mod2 = img_mod.split(2, axis=-1)

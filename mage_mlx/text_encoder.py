@@ -5,7 +5,7 @@ Mage-Flow text encoder config. The text encoder produces 2560-dim embeddings
 that are projected to 3072-dim by the DiT's txt_in layer.
 
 Weight mapping (PyTorch → MLX):
-  model.language_model.X → language_model.X
+  model.language_model.X → language_model.model.X
 
 The tokenizer uses the HuggingFace Qwen3-VL tokenizer with the Mage-Flow
 chat template:
@@ -72,9 +72,13 @@ class Qwen3VLTextEncoder:
         self,
         model_path: str | None = None,
         hf_repo_id: str = "microsoft/Mage-Flow-Turbo",
+        quantization_bits: int = 4,
+        quantization_group_size: int = 64,
     ):
         self.hf_repo_id = hf_repo_id
         self.model_path = model_path
+        self.quantization_bits = quantization_bits
+        self.quantization_group_size = quantization_group_size
 
         # Lazy-load model and tokenizer
         self._model = None
@@ -113,9 +117,13 @@ class Qwen3VLTextEncoder:
                     is_quantized = True
 
         if is_quantized:
-            nn.quantize(self._model, group_size=64, bits=4)
+            nn.quantize(
+                self._model,
+                group_size=self.quantization_group_size,
+                bits=self.quantization_bits,
+            )
 
-        self._model.load_weights(list(weights.items()))
+        self._model.load_weights(list(weights.items()), strict=False)
 
     def _load_tokenizer(self):
         """Load the Qwen3-VL tokenizer from HuggingFace."""
@@ -155,13 +163,10 @@ class Qwen3VLTextEncoder:
             truncation=True,
             max_length=2048,
         )
-        input_ids = mx.array(inputs["input_ids"][0])
+        input_ids = mx.array(inputs["input_ids"][0])[None, :]  # Add batch dim [1, seq_len]
 
-        # Run through the model
-        with mx.no_grad():
-            outputs = model(input_ids)
-            # Get last hidden state
-            last_hidden = outputs.last_hidden_state
+        # Run through the backbone model (model.language_model.model) to get hidden states before lm_head projection
+        last_hidden = model.language_model.model(input_ids)
 
         # Drop the first START_IDX tokens (system prompt)
         last_hidden = last_hidden[:, MAGE_FLOW_START_IDX:, :]

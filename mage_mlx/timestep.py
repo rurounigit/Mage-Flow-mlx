@@ -51,8 +51,10 @@ def get_timestep_embedding(
         0, half_dim, dtype=mx.float32
     ) / (half_dim - downscale_freq_shift)
 
-    # Downcast to timesteps dtype (bf16) — matches training
-    emb = (exponent.astype(timesteps.dtype) if timesteps.dtype != mx.float32 else exponent)
+    # Convert log-frequencies to frequencies, then downcast to the timestep
+    # dtype. The missing exp here changes the entire embedding basis.
+    emb = mx.exp(exponent)
+    emb = emb.astype(timesteps.dtype)
     emb = timesteps[:, None].astype(mx.float32) * emb[None, :]
 
     emb = scale * emb
@@ -104,13 +106,13 @@ class TimestepEmbedding(nn.Module):
 
     def __init__(self, in_channels: int = 256, time_embed_dim: int = 3072):
         super().__init__()
-        self.lin1 = nn.Linear(in_channels, time_embed_dim)
-        self.lin2 = nn.Linear(time_embed_dim, time_embed_dim)
+        self.linear_1 = nn.Linear(in_channels, time_embed_dim)
+        self.linear_2 = nn.Linear(time_embed_dim, time_embed_dim)
 
     def __call__(self, x: mx.array) -> mx.array:
-        x = self.lin1(x)
+        x = self.linear_1(x)
         x = nn.silu(x)
-        x = self.lin2(x)
+        x = self.linear_2(x)
         return x
 
 
