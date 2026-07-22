@@ -1,0 +1,22 @@
+[project]
+name = "mage-flow-mlx"
+version = "0.1.0"
+description = "Mage-Flow (4B MMDiT) ported to MLX for Apple Silicon"
+requires-python = ">=3.11"
+dependencies = [
+    "mlx>=0.32",
+    "mlx-lm>=0.31",
+    "safetensors>=0.4",
+    "huggingface-hub>=0.23",
+    "pillow>=10.0",
+    "numpy>=1.24",
+    "regex>=2023.12",
+]
+
+[project.scripts]
+mage-flow-generate = "generate:main"
+
+[tool.uv]
+dev-dependencies = [
+    "torch>=2.3",
+]
