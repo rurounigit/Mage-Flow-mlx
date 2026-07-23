@@ -96,6 +96,9 @@ python generate.py [OPTIONS]
 | `--negative-prompt TEXT` | one space (`" "`) | Text for the unconditional/negative CFG branch. It is only used when `--guidance` is greater than 1. |
 | `--output PATH` | `output.png` | Destination image path. The format is inferred from the extension by Pillow. |
 | `--quantize INT` | none | Use a persistent 4- or 8-bit DiT cache. The variant is created atomically on first use and reused afterward. The canonical checkpoint stays BF16; boundary, modulation, and the sensitive final image MLP expansion remain BF16 inside each mixed-precision variant. |
+| `--worker PATH` | none | Run in persistent JSONL worker mode. Models (DiT, VAE, tokenizer) stay resident across all prompts in the file. Uses prompt queue mode: Qwen is loaded once, all prompts are text-encoded, then Qwen is unloaded. Repeated prompts with the same text skip Qwen entirely via the embedding cache. |
+| `--profile` | none | Enable phase-level timing and peak memory profiling. Prints a detailed report at the end of generation. |
+| `--benchmark-cleanup` | none | Benchmark text encoder cleanup strategies (unload only, unload+gc, unload+cache, all three). Runs a single generation with each strategy and reports timing. |
 
 
 ### Examples
@@ -116,6 +119,78 @@ python generate.py \
   --prompt "Product photograph of a wristwatch on black velvet" \
   --negative-prompt "blurry, distorted, text, watermark" \
 ```
+
+### Persistent Worker Mode (Batch Generation)
+
+For generating multiple images, use the JSONL worker mode. Models (DiT, VAE, tokenizer) stay resident across all prompts, and Qwen is loaded once to encode all prompts before being unloaded. Repeated prompts with the same text skip Qwen entirely via the embedding cache.
+
+```bash
+# Create a JSONL prompts file
+cat > prompts.jsonl << 'EOF'
+{"prompt": "A serene mountain landscape at sunset", "seed": 42, "output": "mountain.png"}
+{"prompt": "A futuristic cityscape at night", "seed": 43, "output": "city.png"}
+{"prompt": "A serene mountain landscape at sunset", "seed": 44, "output": "mountain_v2.png"}
+EOF
+
+# Run the worker with profiling
+python generate.py --worker prompts.jsonl --quantize 4 --profile
+```
+
+JSONL format (one JSON object per line):
+
+| Field | Required | Description |
+|---|---|---|
+| `prompt` | yes | Text prompt |
+| `output` | no | Output path (default: `output_N.png`) |
+| `seed` | no | Random seed (default: 42) |
+| `guidance` | no | CFG scale (default: 1.0) |
+| `width` | no | Output width (default: 1024) |
+| `height` | no | Output height (default: 1024) |
+| `steps` | no | Denoising steps (default: 4) |
+| `negative_prompt` | no | Negative prompt (default: " ") |
+
+## Performance Optimizations
+
+### Persistent Worker (Prompt Queue Mode)
+
+The `--worker` flag keeps DiT, VAE, and tokenizer resident across all prompts in a JSONL file. Qwen is loaded once, all prompts are text-encoded, then Qwen is unloaded. This amortizes the ~8 GB Qwen load across the entire batch.
+
+### Prompt Embedding Cache
+
+Text embeddings are cached on disk (~118 KB each) keyed by:
+- Formatted prompt text
+- Negative prompt text
+- Text-encoder checkpoint signature (size + mtime)
+- Tokenizer/template version
+
+For a cache hit, Qwen loading and text encoding are skipped entirely. This is especially useful when testing seeds, resolutions, quantization levels, or scheduler changes with the same prompt.
+
+### Phase-Level Profiler
+
+The `--profile` flag instruments every phase of generation:
+- Python/import startup
+- DiT load, VAE load, text encoder load
+- Text encoding, Qwen unload
+- Each DiT step, VAE decode, PNG save
+- Total wall-clock time
+
+### RoPE cos/sin Cache
+
+`MageFlowEmbedRope` caches cosine/sine tensors by resolution. Previously, every attention block recomputed `cos` and `sin` from raw angle tensors. For fixed resolution, the cached tensors are reused across all 12 blocks.
+
+### Cleanup Strategy
+
+The `cleanup_strategy` parameter in `pipeline.generate()` controls Qwen cleanup after text encoding:
+- `"unload_only"` — just unload Qwen (fastest, used by worker)
+- `"unload+gc"` — unload + `gc.collect()`
+- `"unload+cache"` — unload + `mx.clear_cache()`
+- `"all_three"` — all three (default)
+
+The `--benchmark-cleanup` flag benchmarks all four strategies.
+
+### `_generate_from_embeds()` Bypass
+
+For cached prompts, the worker calls `pipeline._generate_from_embeds()` which directly runs DiT steps + VAE decode using pre-encoded embeddings, skipping text encoding and `mx.clear_cache()` entirely. This eliminates the allocation churn that made the first DiT step of each subsequent prompt 2-4× slower.
 
 ## Architecture
 
@@ -160,7 +235,10 @@ mage-flow-mlx/
 │   ├── text_encoder.py     # Qwen3-VL text encoder (mlx-lm)
 │   ├── vae.py              # MageVAE (DConvEncoder + DConvDenoiser + CoD)
 │   ├── scheduler.py        # FlowMatchEulerDiscreteScheduler
-│   └── pipeline.py         # MageFlowPipeline (end-to-end)
+│   ├── pipeline.py         # MageFlowPipeline (end-to-end)
+│   ├── profiler.py         # Phase-level timing and memory profiler
+│   ├── embedding_cache.py  # Prompt embedding cache (skip Qwen load on cache hit)
+│   └── worker.py           # Persistent JSONL worker (models stay resident)
 └── README.md
 ```
 
