@@ -14,6 +14,7 @@ from __future__ import annotations
 import gc
 import json
 import os
+from typing import Optional
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -172,6 +173,7 @@ class MageFlowPipeline:
         model_dir: str = "models/mage_flow_mlx",
         num_steps: int = 4,
         quantize: int | None = None,
+        profiler: Optional["object"] = None,
     ) -> "MageFlowPipeline":
         """Load a Mage-Flow MLX pipeline from a directory or HF repo ID.
 
@@ -179,6 +181,7 @@ class MageFlowPipeline:
             model_dir: Directory containing converted MLX weights or HF repo ID
             num_steps: Number of denoising steps
             quantize: If set (4 or 8), quantize transformer weights to N bits
+            profiler: Optional Profiler instance for phase-level timing
 
         Returns:
             MageFlowPipeline instance
@@ -222,15 +225,21 @@ class MageFlowPipeline:
                 expected_metadata,
             )
             if cache_is_valid:
+                if profiler:
+                    profiler.start("dit_load")
                 quantized_layers = _quantize_transformer(
                     transformer, actual_quantize
                 )
                 transformer.load_weights(quantized_path, strict=True)
+                if profiler:
+                    profiler.stop("dit_load")
                 print(
                     f"  Loaded cached {actual_quantize}-bit DiT: "
                     f"{quantized_layers} quantized layers"
                 )
             else:
+                if profiler:
+                    profiler.start("dit_load")
                 weights = mx.load(dit_weights_path)
                 transformer.load_weights(list(weights.items()), strict=False)
                 print(f"  Loaded DiT: {len(weights)} tensors (BF16)")
@@ -245,25 +254,39 @@ class MageFlowPipeline:
                     quantized_metadata_path,
                     expected_metadata,
                 )
+                if profiler:
+                    profiler.stop("dit_load")
                 print(
                     f"  Cached {actual_quantize}-bit DiT at {quantized_path} "
                     f"({quantized_layers} quantized layers)"
                 )
         else:
+            if profiler:
+                profiler.start("dit_load")
             weights = mx.load(dit_weights_path)
             transformer.load_weights(list(weights.items()), strict=False)
+            if profiler:
+                profiler.stop("dit_load")
             print(f"  Loaded DiT: {len(weights)} tensors (BF16)")
 
         # Load VAE
+        if profiler:
+            profiler.start("vae_load")
         vae_weights_path = os.path.join(model_dir, "vae.safetensors")
         vae = MageVAE(vae_weights_path, sample_posterior=False)
+        if profiler:
+            profiler.stop("vae_load")
         print(f"  Loaded VAE")
 
-        # Load text encoder
+        # Load text encoder (lazy — model weights are loaded on first use)
+        if profiler:
+            profiler.start("text_encoder_load")
         te_weights_path = os.path.join(model_dir, "text_encoder.safetensors")
         text_encoder = Qwen3VLTextEncoder(
             model_path=te_weights_path if os.path.exists(te_weights_path) else None,
         )
+        if profiler:
+            profiler.stop("text_encoder_load")
         print(f"  Loaded text encoder")
 
         return cls(transformer, vae, text_encoder, num_steps=num_steps)
@@ -276,6 +299,7 @@ class MageFlowPipeline:
         seed: int = 42,
         guidance_scale: float = 5.0,
         negative_prompt: str = " ",
+        profiler: Optional["object"] = None,
     ) -> Image.Image:
         """Generate an image from a text prompt.
 
@@ -286,6 +310,7 @@ class MageFlowPipeline:
             seed: Random seed for reproducibility
             guidance_scale: Classifier-free guidance scale; 1 disables CFG
             negative_prompt: Prompt for the unconditional CFG branch
+            profiler: Optional Profiler instance for phase-level timing
 
         Returns:
             PIL Image
@@ -301,6 +326,8 @@ class MageFlowPipeline:
         lat_h, lat_w = height // 16, width // 16
 
         # 1. Text encoding via Qwen3-VL
+        if profiler:
+            profiler.start("text_encode")
         print(f"  Encoding text: '{prompt[:80]}...'")
         txt_embeds = self.text_encoder(prompt)
         mx.eval(txt_embeds)
@@ -311,12 +338,18 @@ class MageFlowPipeline:
             neg_txt_embeds = self.text_encoder(negative_prompt)
             mx.eval(neg_txt_embeds)
             print(f"  Negative text embeddings: {neg_txt_embeds.shape}")
+        if profiler:
+            profiler.stop("text_encode")
 
         # Qwen is only needed for prompt encoding. Releasing its ~8.9 GB BF16
         # weights leaves ample unified memory for DiT activations at 1024².
+        if profiler:
+            profiler.start("text_encoder_unload")
         self.text_encoder.unload()
         gc.collect()
         mx.clear_cache()
+        if profiler:
+            profiler.stop("text_encoder_unload")
         print("  Unloaded text encoder")
 
         # 2. Initialize Gaussian noise in latent space (NHWC)
@@ -324,6 +357,8 @@ class MageFlowPipeline:
 
         # 3. Flow matching sampling loop
         for i in range(self.num_steps):
+            if profiler:
+                profiler.start(f"dit_step_{i + 1}")
             sigma = self.scheduler.sigmas[i]
 
             # Reshape latent to sequence: [1, H*W, 128]
@@ -360,11 +395,17 @@ class MageFlowPipeline:
 
             # Free graph memory
             mx.eval(latents)
+            if profiler:
+                profiler.stop(f"dit_step_{i + 1}")
             print(f"  Step {i + 1}/{self.num_steps} complete (sigma={float(sigma):.4f})")
 
         # 4. Decode latent via VAE
+        if profiler:
+            profiler.start("vae_decode")
         print("  Decoding latent...")
         images = self.vae.decode(latents)  # [1, H, W, 3] in [-1, 1]
+        if profiler:
+            profiler.stop("vae_decode")
 
         # Convert to PIL
         img_array = (images[0] + 1.0) * 127.5

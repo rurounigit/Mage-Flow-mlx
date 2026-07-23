@@ -8,6 +8,7 @@ Usage:
     python generate.py --prompt "..." --output output.png
     python generate.py --prompt "..." --model microsoft/Mage-Flow-Turbo
     python generate.py --prompt "..." --quantize 4
+    python generate.py --prompt "..." --profile
 """
 
 from __future__ import annotations
@@ -62,6 +63,10 @@ def main():
         "--quantize", type=int, default=None, choices=[4, 8],
         help="Quantize supported DiT layers to 4 or 8 bits in memory"
     )
+    parser.add_argument(
+        "--profile", action="store_true",
+        help="Enable phase-level timing and memory profiling"
+    )
     args = parser.parse_args()
 
     # Validate dimensions
@@ -74,6 +79,14 @@ def main():
     if args.guidance < 1.0:
         print(f"Error: guidance must be at least 1.0, got {args.guidance}")
         sys.exit(1)
+
+    # --- Phase: Python/import startup ---
+    from mage_mlx.profiler import Profiler
+
+    prof = Profiler(enabled=args.profile, track_memory=args.profile)
+
+    prof.start("total_wall_clock")
+    prof.start("python_startup")
 
     # Load pipeline (auto-downloads and converts weights if needed)
     print(f"Loading Mage-Flow MLX pipeline from {args.model}...")
@@ -88,27 +101,31 @@ def main():
         traceback.print_exc()
         sys.exit(1)
 
-    import time
+    prof.stop("python_startup")
 
+    # --- Phase: Pipeline load (DiT + VAE + text encoder) ---
+    prof.start("pipeline_load")
     try:
         print(f"  Loading model from {args.model}...")
         pipeline = MageFlowPipeline.from_pretrained(
             model_dir=args.model,
             num_steps=args.steps,
             quantize=args.quantize,
+            profiler=prof,
         )
         print("  Pipeline loaded successfully!")
     except Exception as e:
         print(f"  ERROR loading pipeline: {e}")
         traceback.print_exc()
         sys.exit(1)
+    prof.stop("pipeline_load")
 
-    # Generate
+    # --- Phase: Generation ---
     print(f"\nGenerating {args.height}x{args.width} image...")
     print(f"Prompt: {args.prompt}")
     print(f"Steps: {args.steps}, Seed: {args.seed}")
 
-    t_gen_start = time.time()
+    prof.start("generation")
     image = pipeline.generate(
         prompt=args.prompt,
         height=args.height,
@@ -116,14 +133,22 @@ def main():
         seed=args.seed,
         guidance_scale=args.guidance,
         negative_prompt=args.negative_prompt,
+        profiler=prof,
     )
-    t_gen_elapsed = time.time() - t_gen_start
-    print(f"⏱️ Total generation time: {t_gen_elapsed:.2f}s")
+    prof.stop("generation")
 
-    # Save
+    # --- Phase: Save ---
+    prof.start("save_png")
     image.save(args.output)
+    prof.stop("save_png")
     print(f"\n✅ Image saved to {args.output}")
     print(f"   Size: {image.size}")
+
+    prof.stop("total_wall_clock")
+
+    # --- Report ---
+    if args.profile:
+        prof.print_report()
 
 
 if __name__ == "__main__":
