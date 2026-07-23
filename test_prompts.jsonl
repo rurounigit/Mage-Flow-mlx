@@ -1,5 +1,6 @@
-{"prompt": "A serene mountain landscape at sunset, snow-capped peaks, golden hour lighting, wide angle", "seed": 42, "output": "test_01_mountain_seed42.png"}
-{"prompt": "A serene mountain landscape at sunset, snow-capped peaks, golden hour lighting, wide angle", "seed": 43, "output": "test_02_mountain_seed43.png"}
-{"prompt": "A futuristic cityscape at night, neon lights, cyberpunk, rain-slicked streets, 4k", "seed": 44, "output": "test_03_city_seed44.png"}
-{"prompt": "A serene mountain landscape at sunset, snow-capped peaks, golden hour lighting, wide angle", "seed": 45, "output": "test_04_mountain_512.png"}
-{"prompt": "A serene mountain landscape at sunset, snow-capped peaks, golden hour lighting, wide angle", "seed": 46, "steps": 8, "output": "test_05_mountain_8steps.png"}
+{"prompt": "A steampunk airship battling a mechanical dragon over a Victorian city, copper and brass details, dramatic storm lighting, cinematic wide shot, hyperdetailed", "seed": 42, "output": "test_01_airship_dragon.png"}
+{"prompt": "An astronaut riding a cosmic wolf through a nebula, bioluminescent fur, star trails, ethereal purple and blue lighting, by Studio Ghibli and Moebius", "seed": 43, "output": "test_02_cosmic_wolf.png"}
+{"prompt": "A bustling Moroccan marketplace at golden hour, spices and textiles, intricate patterns, warm amber lighting, photorealistic, 8k", "seed": 44, "output": "test_03_marketplace.png"}
+{"prompt": "A cybernetic koi fish swimming through glowing circuit boards, neon green and electric blue, glitch art aesthetic, ultra sharp focus", "seed": 45, "output": "test_04_circuit_koi.png"}
+{"prompt": "A library that exists inside a giant tree, floating books, magical glow, fantasy realism, by Alan Lee and John Howe", "seed": 46, "output": "test_05_tree_library.png"}
+{"prompt": "A retro-futuristic diner on Mars, neon signs, red planet landscape visible through windows, 1950s sci-fi movie poster style", "seed": 47, "output": "test_06_mars_diner.png"}
