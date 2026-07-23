@@ -427,6 +427,104 @@ class MageFlowPipeline:
         img_np = np.array(img_array)
         return Image.fromarray(img_np)
 
+    def _generate_from_embeds(
+        self,
+        txt_embeds: mx.array,
+        neg_txt_embeds: Optional[mx.array],
+        height: int = 1024,
+        width: int = 1024,
+        seed: int = 42,
+        guidance_scale: float = 5.0,
+        profiler: Optional["object"] = None,
+    ) -> Image.Image:
+        """Generate an image from pre-encoded text embeddings.
+
+        Bypasses text encoding and Qwen unloading entirely. Used by the
+        persistent worker when embeddings are cached or pre-encoded in batch.
+
+        Args:
+            txt_embeds: [1, seq_len, 2560] positive prompt embeddings
+            neg_txt_embeds: [1, seq_len, 2560] negative prompt embeddings, or None
+            height: Output image height (must be multiple of 16)
+            width: Output image width (must be multiple of 16)
+            seed: Random seed for reproducibility
+            guidance_scale: Classifier-free guidance scale; 1 disables CFG
+            profiler: Optional Profiler instance for phase-level timing
+
+        Returns:
+            PIL Image
+        """
+        if height <= 0 or width <= 0 or height % 16 or width % 16:
+            raise ValueError("height and width must be positive multiples of 16")
+        if guidance_scale < 1.0:
+            raise ValueError("guidance_scale must be at least 1.0")
+
+        mx.random.seed(seed)
+
+        # Latent grid size (16x downsample)
+        lat_h, lat_w = height // 16, width // 16
+
+        # Initialize Gaussian noise in latent space (NHWC)
+        latents = mx.random.normal((1, lat_h, lat_w, 128)).astype(mx.bfloat16)
+
+        # Flow matching sampling loop
+        for i in range(self.num_steps):
+            if profiler:
+                profiler.start(f"dit_step_{i + 1}")
+            sigma = self.scheduler.sigmas[i]
+
+            # Reshape latent to sequence: [1, H*W, 128]
+            latents_seq = latents.reshape(1, -1, 128)
+
+            # MageFlowTimestepProjEmbeddings applies its own scale=1000, so the
+            # transformer receives the normalized flow sigma, not sigma*1000.
+            t_batch = mx.array([float(sigma)])
+
+            # Run through DiT
+            v_pred_seq = self.transformer(
+                img=latents_seq,
+                txt=txt_embeds,
+                timesteps=t_batch,
+                img_shapes=(1, lat_h, lat_w),
+            )
+
+            if neg_txt_embeds is not None:
+                v_uncond_seq = self.transformer(
+                    img=latents_seq,
+                    txt=neg_txt_embeds,
+                    timesteps=t_batch,
+                    img_shapes=(1, lat_h, lat_w),
+                )
+                v_pred_seq = v_uncond_seq + guidance_scale * (
+                    v_pred_seq - v_uncond_seq
+                )
+
+            # Reshape velocity prediction back to NHWC
+            v_pred = v_pred_seq.reshape(1, lat_h, lat_w, 128)
+
+            # Euler step
+            latents = self.scheduler.step(v_pred, i, latents)
+
+            # Free graph memory
+            mx.eval(latents)
+            if profiler:
+                profiler.stop(f"dit_step_{i + 1}")
+            print(f"  Step {i + 1}/{self.num_steps} complete (sigma={float(sigma):.4f})")
+
+        # Decode latent via VAE
+        if profiler:
+            profiler.start("vae_decode")
+        print("  Decoding latent...")
+        images = self.vae.decode(latents)  # [1, H, W, 3] in [-1, 1]
+        if profiler:
+            profiler.stop("vae_decode")
+
+        # Convert to PIL
+        img_array = (images[0] + 1.0) * 127.5
+        img_array = mx.clip(img_array, 0, 255).astype(mx.uint8)
+        img_np = np.array(img_array)
+        return Image.fromarray(img_np)
+
     def _apply_memory_policy(self, width: int, height: int) -> None:
         """Apply memory-saving policies for constrained Macs.
 

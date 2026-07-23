@@ -309,10 +309,8 @@ def _generate_with_cached_embeds(
 ):
     """Generate an image using cached text embeddings.
 
-    Patches the text encoder's ``__call__`` to return cached embeddings,
-    bypassing Qwen loading entirely. The pipeline's ``generate()`` method
-    will call ``text_encoder(prompt)`` and ``text_encoder(negative_prompt)``,
-    both of which return cached values.
+    Calls ``pipeline._generate_from_embeds()`` which bypasses text encoding
+    and Qwen unloading entirely. Only DiT steps and VAE decode are run.
 
     Args:
         pipeline: MageFlowPipeline instance (Qwen already unloaded)
@@ -324,30 +322,12 @@ def _generate_with_cached_embeds(
     Returns:
         Generated PIL Image
     """
-    # Save original text encoder call
-    original_call = pipeline.text_encoder.__call__
-    neg_prompt = params.get("negative_prompt", " ")
-
-    def cached_call(prompt_or_neg):
-        """Return the correct cached embeddings based on the prompt string."""
-        if prompt_or_neg == neg_prompt and neg_embeds is not None:
-            return neg_embeds
-        return pos_embeds
-
-    pipeline.text_encoder.__call__ = cached_call
-
-    try:
-        image = pipeline.generate(
-            prompt=params["prompt"],
-            height=params["height"],
-            width=params["width"],
-            seed=params["seed"],
-            guidance_scale=params["guidance"],
-            negative_prompt=neg_prompt,
-            profiler=profiler,
-            cleanup_strategy="unload_only",
-        )
-        return image
-    finally:
-        # Restore original
-        pipeline.text_encoder.__call__ = original_call
+    return pipeline._generate_from_embeds(
+        txt_embeds=pos_embeds,
+        neg_txt_embeds=neg_embeds,
+        height=params["height"],
+        width=params["width"],
+        seed=params["seed"],
+        guidance_scale=params["guidance"],
+        profiler=profiler,
+    )
