@@ -1,0 +1,184 @@
+Yes. There are several realistic ways to speed up the **whole process**, but the highest-impact option is architectural rather than another matrix micro-optimization.
+
+## Where time currently goes
+
+A one-shot CLI invocation does all of this every time:
+
+1. Start Python and import MLX/Transformers.
+2. Instantiate DiT, VAE, and a lazy text encoder wrapper.
+3. Load 4.2–7.7 GiB of DiT weights.
+4. On first prompt use, instantiate Qwen and load ~8 GiB of text weights.
+5. Load/tokenize with the Hugging Face tokenizer.
+6. Encode the prompt.
+7. Destroy Qwen, run Python GC, and clear the MLX cache.
+8. Run four DiT steps.
+9. Decode with the VAE and save PNG.
+10. Exit and discard everything.
+
+For repeated generations, startup/model I/O likely costs more than the 1–2 seconds we gained in denoising.
+
+## Recommended optimizations, in priority order
+
+### 1. Persistent worker/server — largest expected gain
+
+Keep a Python process alive instead of invoking `generate.py` for every image.
+
+Two useful modes:
+
+- **Interactive batch mode:** load once, accept prompts from stdin/JSONL.
+- **Local HTTP server:** keep models resident and accept generation requests.
+
+Possible memory policies:
+
+- **24 GB safe mode:** keep quantized DiT + VAE resident; load Qwen for prompt encoding, then unload it. This still avoids Python startup, DiT/VAE loading, tokenizer loading, and quantized cache parsing on every request.
+- **Higher-memory fast mode:** keep Qwen resident too. Then repeated requests skip virtually all loading/unloading and only perform tokenization, text forward, four DiT steps, and VAE decode.
+- **Prompt queue mode:** encode several prompts while Qwen is loaded, unload it once, then generate all queued images. This amortizes the expensive Qwen load over a batch without requiring enough RAM to keep Qwen and DiT activations together.
+
+This is likely the best end-to-end improvement.
+
+### 2. Cache prompt embeddings — high value for repeated prompts
+
+Persist text embeddings keyed by:
+
+- formatted prompt text
+- text-encoder checkpoint signature
+- tokenizer/template version
+- negative prompt
+
+For a cache hit, skip Qwen loading and text encoding entirely. A small embedding such as `[1, 30, 2560]` is tiny compared with model weights. This is especially useful when testing seeds, resolutions, quantization levels, or scheduler changes with the same prompt.
+
+### 3. Add phase-level timing before optimizing further
+
+Currently `generate.py` times only `pipeline.generate()`, not total startup. Add timings for:
+
+- Python/import startup approximation
+- DiT load
+- VAE load
+- tokenizer load
+- Qwen model load
+- prompt encoding
+- Qwen unload/GC/cache clear
+- each DiT step
+- VAE decode
+- PNG save
+- total wall-clock
+
+Also record peak memory. This will prevent optimizing a 100 ms phase while ignoring a 5-second model load.
+
+### 4. Avoid loading components before they are needed
+
+The pipeline eagerly loads DiT and VAE, then lazily loads Qwen. The generation order is text first, DiT second, VAE last.
+
+A lower-peak-memory staged loader could:
+
+1. load/tokenize/encode with Qwen;
+2. unload Qwen;
+3. load DiT and run denoising;
+4. unload DiT if needed;
+5. load VAE and decode.
+
+This may not reduce single-run wall time by itself, but lower peak memory can avoid pressure/swap. It also allows larger/faster execution choices. For persistent use, keeping DiT+VAE resident is likely faster than strict staging.
+
+### 5. Remove unnecessary or expensive cleanup calls after measuring
+
+Current prompt transition performs:
+
+```python
+self.text_encoder.unload()
+gc.collect()
+mx.clear_cache()
+```
+
+`gc.collect()` can pause, and `mx.clear_cache()` can discard reusable allocations, increasing later allocation cost. We should benchmark these combinations:
+
+- unload only
+- unload + `gc.collect()`
+- unload + `mx.clear_cache()`
+- all three
+
+Keep only what is required to stay below memory limits.
+
+### 6. Cache tokenizer and formatted-token IDs
+
+The tokenizer already persists for the life of the pipeline object, but the one-shot CLI throws it away each run. A persistent worker fixes that. We can also cache token IDs by formatted prompt, which is small but easy.
+
+### 7. Compile stable graph sections
+
+The scheduler step is already `mx.compile`d. Candidates for benchmarking:
+
+- DiT block forward or complete DiT forward at fixed token shapes
+- VAE decode at common resolutions
+- RoPE application
+
+Caveat: compile overhead can make the first image slower, and dynamic text/image shapes can create multiple compiled variants. This is most useful in a persistent worker with common resolutions such as 1024×1024.
+
+### 8. Cache RoPE trigonometric values, not only raw angles
+
+`MageFlowEmbedRope` caches angle tensors by shape, but every attention block computes `cos` and `sin` again in `apply_rotary_emb_mageflow`, for Q and K across all 12 blocks. For fixed resolution, cache cosine/sine tensors once and reuse them. This is a concrete inference optimization with no quality tradeoff.
+
+### 9. Fuse QKV projections — medium effort, potentially meaningful
+
+Each block performs six separate projection calls:
+
+- image Q/K/V
+- text Q/K/V
+
+These could be represented as fused QKV matrices and split afterward, reducing dispatch overhead and potentially improving memory locality. For quantized caches, this requires a cache policy/version update and careful weight concatenation validation.
+
+### 10. Batch compatible work
+
+For multiple images:
+
+- batch text prompts during Qwen encoding;
+- batch same-resolution latent generation if memory permits;
+- or encode prompts in a batch, unload Qwen, then generate sequentially.
+
+The third option is safest on 24 GB systems.
+
+### 11. Faster/lighter image serialization
+
+PNG compression can be nontrivial at 1024². Add options for:
+
+- lower PNG compression level
+- JPEG/WebP output when lossless output is unnecessary
+- asynchronous saving in persistent mode
+
+This won’t improve denoising, but improves perceived end-to-end latency.
+
+## Proposed benchmark-driven implementation plan
+
+1. **Instrumentation first**
+   - Add phase timers and memory snapshots.
+   - Benchmark BF16, 4-bit cache, and 8-bit cache over cold and warm runs.
+
+2. **Low-risk wins**
+   - Cache RoPE cos/sin by resolution.
+   - Benchmark cleanup combinations and remove unnecessary GC/cache clearing.
+   - Add faster output-save options.
+
+3. **Repeated-generation fast path**
+   - Add JSONL/stdin worker mode that keeps DiT, VAE, and tokenizer resident.
+   - Add prompt-embedding cache.
+   - Add prompt-batch encoding before Qwen unload.
+
+4. **Optional server mode**
+   - Expose the same persistent pipeline over localhost HTTP.
+   - Support safe and high-memory residency policies.
+
+5. **Deeper kernel work only after profiling**
+   - Evaluate `mx.compile` for fixed-shape DiT/VAE paths.
+   - Prototype fused QKV and compare output exactly against current layers.
+
+## My recommended first implementation
+
+I would start with:
+
+1. phase-level profiler,
+2. persistent JSONL worker,
+3. prompt-embedding cache,
+4. RoPE cos/sin cache,
+5. cleanup benchmark.
+
+Those target loading, unloading, and inference without changing model semantics.
+
+Please **toggle to Act mode** if you want me to implement and benchmark that first optimization set.
