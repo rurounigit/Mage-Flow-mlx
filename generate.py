@@ -47,7 +47,7 @@ def main():
         help="Random seed"
     )
     parser.add_argument(
-        "--guidance", type=float, default=5.0,
+        "--guidance", type=float, default=1.0,
         help="Classifier-free guidance scale (1 disables CFG)"
     )
     parser.add_argument(
@@ -80,6 +80,7 @@ def main():
     # Load pipeline
     print(f"Loading Mage-Flow MLX pipeline from {args.model}...")
     from mage_mlx import MageFlowPipeline
+    import time
 
     pipeline = MageFlowPipeline.from_pretrained(
         model_dir=args.model,
@@ -91,6 +92,7 @@ def main():
     print(f"Prompt: {args.prompt}")
     print(f"Steps: {args.steps}, Seed: {args.seed}")
 
+    t_gen_start = time.time()
     image = pipeline.generate(
         prompt=args.prompt,
         height=args.height,
@@ -99,6 +101,8 @@ def main():
         guidance_scale=args.guidance,
         negative_prompt=args.negative_prompt,
     )
+    t_gen_elapsed = time.time() - t_gen_start
+    print(f"⏱️ Total generation time: {t_gen_elapsed:.2f}s")
 
     # Save
     image.save(args.output)

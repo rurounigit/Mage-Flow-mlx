@@ -52,7 +52,7 @@ python generate.py [OPTIONS]
 | `--height INTEGER` | `1024` | Output height in pixels. Must be a positive multiple of 16. Higher resolutions require more unified memory and take longer. |
 | `--width INTEGER` | `1024` | Output width in pixels. Must be a positive multiple of 16. Non-square aspect ratios are supported. |
 | `--seed INTEGER` | `42` | Random seed used for initial latent noise. Reusing the same seed and parameters reproduces the same MLX result. |
-| `--guidance FLOAT` | `5.0` | Classifier-free guidance (CFG) scale. `1.0` disables CFG and performs one DiT pass per step. Values above 1 strengthen prompt adherence but very high values can oversaturate or reduce natural detail. |
+| `--guidance FLOAT` | `1.0` | Classifier-free guidance (CFG) scale. `1.0` disables CFG and performs one DiT pass per step. Values above 1 strengthen prompt adherence but very high values can oversaturate or reduce natural detail. |
 | `--negative-prompt TEXT` | one space (`" "`) | Text for the unconditional/negative CFG branch. It is only used when `--guidance` is greater than 1. |
 | `--output PATH` | `output.png` | Destination image path. The format is inferred from the extension by Pillow. |
 
