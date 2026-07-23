@@ -4,6 +4,11 @@ Keeps DiT, VAE, and tokenizer resident across multiple generations,
 accepting prompts from a JSONL file. CLI flags set defaults; per-prompt
 JSON fields override them.
 
+Uses **prompt queue mode**: all prompts are text-encoded in a single
+Qwen session (load once, encode all, unload once), then all images are
+generated using cached embeddings. This amortizes the ~8 GB Qwen load
+across the entire batch instead of paying it per-prompt.
+
 Usage:
     .venv/bin/python generate.py --worker prompts.jsonl --profile
 
@@ -19,9 +24,12 @@ All other parameters are passed directly to generate().
 
 from __future__ import annotations
 
+import gc
 import json
 import os
 from typing import Any, Optional
+
+import mlx.core as mx
 
 from .profiler import Profiler
 
@@ -130,7 +138,11 @@ def run_worker(
     defaults: dict[str, Any],
     profiler: Optional[Profiler] = None,
 ) -> None:
-    """Run the persistent JSONL worker.
+    """Run the persistent JSONL worker in prompt queue mode.
+
+    Phase 1: Load pipeline (DiT + VAE resident). Load Qwen once, encode all
+    prompts (checking embedding cache first), save to cache, unload Qwen.
+    Phase 2: Generate all images using cached embeddings.
 
     Args:
         jsonl_path: Path to the JSONL prompts file
@@ -156,45 +168,37 @@ def run_worker(
     pipeline: Optional[MageFlowPipeline] = None
     te_path: Optional[str] = None
 
+    # --- Phase 0: Load pipeline (once) ---
+    # Use the first prompt's parameters to determine pipeline config.
+    # All prompts are assumed to share the same model/quantize.
+    first_params = merge_params(defaults, prompts[0])
+    if profiler:
+        profiler.start("pipeline_reload")
+    print(f"  Loading pipeline (model={first_params['model']}, quantize={first_params.get('quantize')})...")
+    pipeline = MageFlowPipeline.from_pretrained(
+        model_dir=first_params["model"],
+        num_steps=first_params.get("steps", 4),
+        quantize=first_params.get("quantize"),
+        profiler=profiler,
+    )
+    te_path = os.path.join(first_params["model"], "text_encoder.safetensors")
+    if not os.path.exists(te_path):
+        te_path = None
+    current_params = dict(first_params)
+    if profiler:
+        profiler.stop("pipeline_reload")
+    print("  Pipeline loaded!")
+
+    # --- Phase 1: Pre-encode all prompts (load Qwen once, encode all, unload) ---
+    print(f"\n{'=' * 60}")
+    print("Phase 1: Pre-encoding prompts (Qwen batch mode)")
+    print(f"{'=' * 60}")
+
+    # Store embeddings in memory for Phase 2
+    prompt_embeds: dict[int, tuple[mx.array, Optional[mx.array]]] = {}
+
     for i, prompt_cfg in enumerate(prompts):
-        print(f"\n{'='*60}")
-        print(f"Prompt {i + 1}/{len(prompts)}")
-        print(f"{'='*60}")
-
-        # Merge with defaults
         params = merge_params(defaults, prompt_cfg)
-
-        # Check if reload is needed
-        needs_pipeline, needs_scheduler = needs_reload(current_params, params)
-
-        if needs_pipeline or pipeline is None:
-            if profiler:
-                profiler.start("pipeline_reload")
-            print(f"  Loading pipeline (model={params['model']}, quantize={params.get('quantize')})...")
-            pipeline = MageFlowPipeline.from_pretrained(
-                model_dir=params["model"],
-                num_steps=params.get("steps", 4),
-                quantize=params.get("quantize"),
-                profiler=profiler,
-            )
-            te_path = os.path.join(params["model"], "text_encoder.safetensors")
-            if not os.path.exists(te_path):
-                te_path = None
-            current_params = dict(params)
-            if profiler:
-                profiler.stop("pipeline_reload")
-            print("  Pipeline loaded!")
-        elif needs_scheduler:
-            print(f"  Resetting scheduler (steps={params['steps']})...")
-            pipeline.scheduler.set_timesteps(params["steps"])
-            pipeline.num_steps = params["steps"]
-            current_params = dict(params)
-
-        # Generate
-        if profiler:
-            profiler.start(f"generation_{i + 1}")
-
-        # Check embedding cache
         cache_key = cache.make_key(
             prompt=params["prompt"],
             negative_prompt=params.get("negative_prompt", " "),
@@ -203,24 +207,83 @@ def run_worker(
         cached_embeds = cache.get(cache_key)
 
         if cached_embeds is not None:
-            print(f"  Embedding cache HIT — skipping Qwen load/encode")
-            image = _generate_with_cached_embeds(
-                pipeline,
-                cached_embeds,
-                params,
-                profiler,
-            )
+            print(f"  Prompt {i + 1}/{len(prompts)}: Cache HIT — skipping Qwen encode")
+            # Still need to encode negative prompt if guidance > 1.0
+            neg_embeds = None
+            if params.get("guidance", 1.0) > 1.0:
+                if profiler:
+                    profiler.start(f"text_encode_neg_{i + 1}")
+                neg_embeds = pipeline.text_encoder(params.get("negative_prompt", " "))
+                mx.eval(neg_embeds)
+                if profiler:
+                    profiler.stop(f"text_encode_neg_{i + 1}")
+            prompt_embeds[i] = (cached_embeds, neg_embeds)
         else:
-            print(f"  Embedding cache MISS — loading Qwen and encoding")
-            image = pipeline.generate(
-                prompt=params["prompt"],
-                height=params["height"],
-                width=params["width"],
-                seed=params["seed"],
-                guidance_scale=params["guidance"],
-                negative_prompt=params.get("negative_prompt", " "),
-                profiler=profiler,
-            )
+            print(f"  Prompt {i + 1}/{len(prompts)}: Cache MISS — encoding with Qwen")
+            if profiler:
+                profiler.start(f"text_encode_{i + 1}")
+
+            # Encode positive prompt (Qwen stays loaded)
+            pos_embeds = pipeline.text_encoder(params["prompt"])
+            mx.eval(pos_embeds)
+            print(f"  Text embeddings: {pos_embeds.shape}")
+
+            # Save to cache for future runs
+            cache.put(cache_key, pos_embeds)
+
+            # Encode negative prompt if guidance > 1.0
+            neg_embeds = None
+            if params.get("guidance", 1.0) > 1.0:
+                neg_embeds = pipeline.text_encoder(params.get("negative_prompt", " "))
+                mx.eval(neg_embeds)
+                print(f"  Negative text embeddings: {neg_embeds.shape}")
+
+            prompt_embeds[i] = (pos_embeds, neg_embeds)
+
+            if profiler:
+                profiler.stop(f"text_encode_{i + 1}")
+
+    # Unload Qwen once after all prompts are encoded
+    if profiler:
+        profiler.start("text_encoder_unload")
+    pipeline.text_encoder.unload()
+    gc.collect()
+    mx.clear_cache()
+    if profiler:
+        profiler.stop("text_encoder_unload")
+    print("  Qwen unloaded (batch encoding complete)")
+
+    # --- Phase 2: Generate all images using cached embeddings ---
+    print(f"\n{'=' * 60}")
+    print("Phase 2: Generating images (DiT + VAE)")
+    print(f"{'=' * 60}")
+
+    for i, prompt_cfg in enumerate(prompts):
+        params = merge_params(defaults, prompt_cfg)
+
+        print(f"\n{'=' * 60}")
+        print(f"Prompt {i + 1}/{len(prompts)}")
+        print(f"{'=' * 60}")
+
+        # Check if scheduler reset is needed
+        needs_pipeline, needs_scheduler = needs_reload(current_params, params)
+        if needs_scheduler:
+            print(f"  Resetting scheduler (steps={params['steps']})...")
+            pipeline.scheduler.set_timesteps(params["steps"])
+            pipeline.num_steps = params["steps"]
+            current_params = dict(params)
+
+        if profiler:
+            profiler.start(f"generation_{i + 1}")
+
+        pos_embeds, neg_embeds = prompt_embeds[i]
+        image = _generate_with_cached_embeds(
+            pipeline,
+            pos_embeds,
+            neg_embeds,
+            params,
+            profiler,
+        )
 
         if profiler:
             profiler.stop(f"generation_{i + 1}")
@@ -238,19 +301,23 @@ def run_worker(
 
 
 def _generate_with_cached_embeds(
-    pipeline,
-    cached_embeds: "mx.array",
+    pipeline: "MageFlowPipeline",
+    pos_embeds: "mx.array",
+    neg_embeds: Optional["mx.array"],
     params: dict[str, Any],
     profiler: Optional[Profiler] = None,
 ):
     """Generate an image using cached text embeddings.
 
-    This bypasses the text encoder entirely by temporarily replacing
-    the text encoder's __call__ method to return cached embeddings.
+    Patches the text encoder's ``__call__`` to return cached embeddings,
+    bypassing Qwen loading entirely. The pipeline's ``generate()`` method
+    will call ``text_encoder(prompt)`` and ``text_encoder(negative_prompt)``,
+    both of which return cached values.
 
     Args:
-        pipeline: MageFlowPipeline instance
-        cached_embeds: Cached positive prompt embeddings [1, seq_len, 2560]
+        pipeline: MageFlowPipeline instance (Qwen already unloaded)
+        pos_embeds: Cached positive prompt embeddings [1, seq_len, 2560]
+        neg_embeds: Cached negative prompt embeddings, or None if no CFG
         params: Generation parameters
         profiler: Optional Profiler instance
 
@@ -259,9 +326,13 @@ def _generate_with_cached_embeds(
     """
     # Save original text encoder call
     original_call = pipeline.text_encoder.__call__
+    neg_prompt = params.get("negative_prompt", " ")
 
     def cached_call(prompt_or_neg):
-        return cached_embeds
+        """Return the correct cached embeddings based on the prompt string."""
+        if prompt_or_neg == neg_prompt and neg_embeds is not None:
+            return neg_embeds
+        return pos_embeds
 
     pipeline.text_encoder.__call__ = cached_call
 
@@ -272,8 +343,9 @@ def _generate_with_cached_embeds(
             width=params["width"],
             seed=params["seed"],
             guidance_scale=params["guidance"],
-            negative_prompt=params.get("negative_prompt", " "),
+            negative_prompt=neg_prompt,
             profiler=profiler,
+            cleanup_strategy="unload_only",
         )
         return image
     finally:
