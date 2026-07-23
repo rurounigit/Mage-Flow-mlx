@@ -124,14 +124,20 @@ class Profiler:
         lines.append(f"  {'Phase':<40} {'Time (s)':>10}   {'Peak RSS (GiB)':>14}")
         lines.append("  " + "-" * 64)
 
-        total = 0.0
         for rec in self._records:
             rss_str = f"{rec.peak_rss_gib:>14.2f}" if rec.peak_rss_gib is not None else "              N/A"
             lines.append(f"  {rec.name:<40} {rec.elapsed:>10.4f}   {rss_str}")
-            total += rec.elapsed
 
+        # Show wall-clock total (not sum of phases, which double-counts
+        # nested phases like generation_N that include dit_step_N children).
+        wall_clock = self.get_elapsed("total_wall_clock")
         lines.append("  " + "-" * 64)
-        lines.append(f"  {'TOTAL':<40} {total:>10.4f}")
+        if wall_clock is not None:
+            lines.append(f"  {'total_wall_clock':<40} {wall_clock:>10.4f}")
+        else:
+            # Fallback: sum only top-level (non-nested) phases
+            lines.append(f"  {'Sum of all phases':<40} {sum(r.elapsed for r in self._records):>10.4f}")
+        lines.append("  Note: phase times are nested; child phases are subsets of parent phases.")
         lines.append("=" * 60)
         lines.append("")
 
