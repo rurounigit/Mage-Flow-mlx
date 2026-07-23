@@ -8,9 +8,14 @@ Components:
     vae           — MageVAE (DConvEncoder + DConvDenoiser + CoD Decoder)
     scheduler     — FlowMatchEulerDiscreteScheduler
     pipeline      — MageFlowPipeline (end-to-end text-to-image)
+    profiler      — Phase-level timing and memory profiler
+    embedding_cache — Prompt embedding cache (skip Qwen load on cache hit)
+    worker        — Persistent JSONL worker (models stay resident)
 """
 
 from .pipeline import MageFlowPipeline
+from .profiler import Profiler
+from .embedding_cache import EmbeddingCache
 
-__all__ = ["MageFlowPipeline"]
+__all__ = ["MageFlowPipeline", "Profiler", "EmbeddingCache"]
 __version__ = "0.1.0"

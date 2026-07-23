@@ -8,6 +8,12 @@ Key translation notes:
   - PyTorch ``torch.polar(ones, angles)`` → MLX: precompute cos/sin from angles
   - PyTorch ``view_as_complex`` / ``view_as_real`` → MLX: manual real/imag split
   - Complex multiplication (a+bi)(c+di) = (ac-bd) + (ad+bc)i
+
+Optimization: cos/sin caching
+  ``MageFlowEmbedRope`` caches cos/sin tensors by (frame, height, width, idx)
+  so that ``apply_rotary_emb_mageflow`` never recomputes ``mx.cos`` / ``mx.sin``
+  for the same resolution. This avoids 24 redundant cos/sin evaluations per
+  DiT step (2 per block × 12 blocks), or 96 across a 4-step generation.
 """
 
 from __future__ import annotations
@@ -41,13 +47,13 @@ def rope_params(index: mx.array, dim: int, theta: float = 10000.0) -> mx.array:
 def apply_rotary_emb_mageflow(x: mx.array, freqs_cis: mx.array) -> mx.array:
     """Apply complex rotary embeddings to ``x`` using ``freqs_cis``.
 
-    Port of ``apply_rotary_emb_mageflow`` from PyTorch. The freqs_cis tensor
-    stores the raw angle values (not pre-computed cos/sin); we compute cos/sin
-    here to avoid storing complex numbers in MLX.
+    ``freqs_cis`` may be either:
+    - Raw angle values [N, D//2] — cos/sin are computed here (backward compat)
+    - Pre-computed cos/sin as a tuple (cos, sin) — no computation needed
 
     Args:
         x: [N, H, D] or [N, D] — query/key tensor (D must be even)
-        freqs_cis: [N, D//2] — angle values for each position
+        freqs_cis: [N, D//2] angle values, or (cos, sin) tuple
 
     Returns:
         Rotated tensor, same shape as x
@@ -58,12 +64,16 @@ def apply_rotary_emb_mageflow(x: mx.array, freqs_cis: mx.array) -> mx.array:
     x_real = x[..., 0]
     x_imag = x[..., 1]
 
-    # freqs_cis has shape [N, D//2]; unsqueeze to broadcast with [N, H, D//2]
-    if freqs_cis.ndim == 2:
-        freqs_cis = freqs_cis[:, None, :]
-
-    cos = mx.cos(freqs_cis)
-    sin = mx.sin(freqs_cis)
+    # Accept either pre-computed (cos, sin) tuple or raw angle values
+    if isinstance(freqs_cis, tuple):
+        cos, sin = freqs_cis
+    else:
+        # freqs_cis has shape [N, D//2]; unsqueeze to broadcast with [N, H, D//2]
+        angles = freqs_cis
+        if angles.ndim == 2:
+            angles = angles[:, None, :]
+        cos = mx.cos(angles)
+        sin = mx.sin(angles)
 
     # Complex multiplication: (a+bi) * (cos+i*sin) = (a*cos - b*sin) + i*(a*sin + b*cos)
     out_real = x_real * cos - x_imag * sin
@@ -78,6 +88,10 @@ class MageFlowEmbedRope(nn.Module):
 
     Computes vision RoPE frequencies for packed image tokens. Text tokens
     are NOT rotated (no text RoPE is computed).
+
+    Caches both raw angle values and pre-computed cos/sin tensors by
+    (frame, height, width, idx) so that cos/sin are computed once per
+    resolution and reused across all attention blocks and DiT steps.
 
     Args:
         theta: Base frequency (default 10000)
@@ -124,7 +138,8 @@ class MageFlowEmbedRope(nn.Module):
         )
 
         self.scale_rope = scale_rope
-        self._cache: dict[tuple, mx.array] = {}
+        # Cache: (frame, height, width, idx) → (freqs_cis, cos, sin)
+        self._cache: dict[tuple, tuple[mx.array, mx.array, mx.array]] = {}
 
     def _compute_video_freqs(
         self, frame: int, height: int, width: int, idx: int = 0
@@ -185,12 +200,16 @@ class MageFlowEmbedRope(nn.Module):
     ) -> mx.array:
         """Compute vision RoPE frequencies for packed image tokens.
 
+        Returns pre-computed cos/sin as a tuple (cos, sin) instead of raw
+        angle values, so that ``apply_rotary_emb_mageflow`` skips the
+        expensive ``mx.cos`` / ``mx.sin`` calls.
+
         Args:
             video_fhw: (frame, height, width) or list of such tuples
             max_img_len: Pad to this length if provided
 
         Returns:
-            [seq_len, dim//2] angle tensor (pre-polar)
+            (cos, sin) tuple of [seq_len, dim//2] tensors
         """
         if isinstance(video_fhw, list):
             video_fhw = video_fhw[0]
@@ -202,13 +221,22 @@ class MageFlowEmbedRope(nn.Module):
             frame, height, width = fhw
             key = (frame, height, width, idx)
             if key not in self._cache:
-                self._cache[key] = self._compute_video_freqs(frame, height, width, idx)
+                freqs_cis = self._compute_video_freqs(frame, height, width, idx)
+                # Pre-compute cos/sin once per resolution and cache them.
+                # This avoids 24 redundant cos/sin evaluations per DiT step
+                # (2 per block × 12 blocks), or 96 across 4 steps.
+                cos = mx.cos(freqs_cis)
+                sin = mx.sin(freqs_cis)
+                self._cache[key] = (freqs_cis, cos, sin)
             vid_freqs.append(self._cache[key])
 
-        result = mx.concat(vid_freqs, axis=0)
+        # Concatenate cos/sin across all video segments
+        cos_result = mx.concat([v[1] for v in vid_freqs], axis=0)
+        sin_result = mx.concat([v[2] for v in vid_freqs], axis=0)
 
-        if max_img_len is not None and result.shape[0] < max_img_len:
-            pad_len = max_img_len - result.shape[0]
-            result = mx.pad(result, [(0, pad_len), (0, 0)])
+        if max_img_len is not None and cos_result.shape[0] < max_img_len:
+            pad_len = max_img_len - cos_result.shape[0]
+            cos_result = mx.pad(cos_result, [(0, pad_len), (0, 0)])
+            sin_result = mx.pad(sin_result, [(0, pad_len), (0, 0)])
 
-        return result
+        return (cos_result, sin_result)

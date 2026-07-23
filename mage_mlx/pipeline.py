@@ -32,6 +32,9 @@ QUANTIZATION_POLICY_VERSION = 1
 QUANTIZATION_GROUP_SIZE = 32
 SUPPORTED_QUANTIZATION_BITS = (4, 8)
 
+# Valid cleanup strategies for text encoder unload
+CLEANUP_STRATEGIES = ("unload_only", "unload+gc", "unload+cache", "all_three")
+
 
 def should_quantize_dit_layer(path: str, module: nn.Module) -> bool:
     """Select quality-safe DiT layers for runtime weight quantization."""
@@ -300,6 +303,7 @@ class MageFlowPipeline:
         guidance_scale: float = 5.0,
         negative_prompt: str = " ",
         profiler: Optional["object"] = None,
+        cleanup_strategy: str = "all_three",
     ) -> Image.Image:
         """Generate an image from a text prompt.
 
@@ -311,6 +315,9 @@ class MageFlowPipeline:
             guidance_scale: Classifier-free guidance scale; 1 disables CFG
             negative_prompt: Prompt for the unconditional CFG branch
             profiler: Optional Profiler instance for phase-level timing
+            cleanup_strategy: Qwen cleanup strategy after text encoding.
+                One of: "unload_only", "unload+gc", "unload+cache", "all_three".
+                "all_three" is the default (current behavior).
 
         Returns:
             PIL Image
@@ -319,6 +326,11 @@ class MageFlowPipeline:
             raise ValueError("height and width must be positive multiples of 16")
         if guidance_scale < 1.0:
             raise ValueError("guidance_scale must be at least 1.0")
+        if cleanup_strategy not in CLEANUP_STRATEGIES:
+            raise ValueError(
+                f"cleanup_strategy must be one of {CLEANUP_STRATEGIES}, "
+                f"got {cleanup_strategy}"
+            )
 
         mx.random.seed(seed)
 
@@ -346,8 +358,10 @@ class MageFlowPipeline:
         if profiler:
             profiler.start("text_encoder_unload")
         self.text_encoder.unload()
-        gc.collect()
-        mx.clear_cache()
+        if cleanup_strategy in ("unload+gc", "all_three"):
+            gc.collect()
+        if cleanup_strategy in ("unload+cache", "all_three"):
+            mx.clear_cache()
         if profiler:
             profiler.stop("text_encoder_unload")
         print("  Unloaded text encoder")

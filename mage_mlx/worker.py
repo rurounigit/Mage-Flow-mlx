@@ -1,0 +1,281 @@
+"""Persistent JSONL worker for Mage-Flow MLX.
+
+Keeps DiT, VAE, and tokenizer resident across multiple generations,
+accepting prompts from a JSONL file. CLI flags set defaults; per-prompt
+JSON fields override them.
+
+Usage:
+    .venv/bin/python generate.py --worker prompts.jsonl --profile
+
+JSONL format (one JSON object per line):
+    {"prompt": "A cat", "seed": 42, "output": "cat.png"}
+    {"prompt": "A dog", "seed": 43, "output": "dog.png", "steps": 8}
+    {"prompt": "A bird", "seed": 44, "output": "bird.png", "width": 512, "height": 512}
+
+Parameters requiring pipeline reload (model, quantize) trigger a reload.
+Parameters requiring scheduler update (steps) trigger a scheduler reset.
+All other parameters are passed directly to generate().
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from typing import Any, Optional
+
+from .profiler import Profiler
+
+
+# Parameters that require a full pipeline reload
+RELOAD_PARAMS = {"model", "quantize"}
+
+# Parameters that require a scheduler reset (but no model reload)
+SCHEDULER_PARAMS = {"steps"}
+
+# All valid per-prompt parameters
+VALID_PARAMS = {
+    "prompt", "negative_prompt", "seed", "guidance",
+    "width", "height", "output", "steps", "model", "quantize",
+}
+
+
+def load_prompts(jsonl_path: str) -> list[dict[str, Any]]:
+    """Load prompts from a JSONL file.
+
+    Args:
+        jsonl_path: Path to the JSONL file
+
+    Returns:
+        List of prompt dictionaries
+    """
+    prompts = []
+    with open(jsonl_path) as f:
+        for line_num, line in enumerate(f, 1):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            try:
+                prompt = json.loads(line)
+            except json.JSONDecodeError as e:
+                print(f"  WARNING: Skipping line {line_num}: invalid JSON: {e}")
+                continue
+
+            # Validate required fields
+            if "prompt" not in prompt:
+                print(f"  WARNING: Skipping line {line_num}: missing 'prompt' field")
+                continue
+            if "output" not in prompt:
+                prompt["output"] = f"output_{line_num}.png"
+
+            # Validate parameter names
+            invalid = set(prompt.keys()) - VALID_PARAMS
+            if invalid:
+                print(f"  WARNING: Skipping line {line_num}: unknown parameters: {invalid}")
+                continue
+
+            prompts.append(prompt)
+
+    return prompts
+
+
+def merge_params(
+    defaults: dict[str, Any],
+    override: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge per-prompt parameters with CLI defaults.
+
+    Per-prompt values take precedence over CLI defaults.
+
+    Args:
+        defaults: CLI default parameters
+        override: Per-prompt override parameters
+
+    Returns:
+        Merged parameter dictionary
+    """
+    merged = dict(defaults)
+    merged.update(override)
+    return merged
+
+
+def needs_reload(
+    current: dict[str, Any],
+    new: dict[str, Any],
+) -> tuple[bool, bool]:
+    """Check if a pipeline reload or scheduler reset is needed.
+
+    Args:
+        current: Current pipeline parameters
+        new: New prompt parameters
+
+    Returns:
+        (needs_pipeline_reload, needs_scheduler_reset)
+    """
+    needs_pipeline = False
+    needs_scheduler = False
+
+    for param in RELOAD_PARAMS:
+        if param in new and new[param] != current.get(param):
+            needs_pipeline = True
+
+    for param in SCHEDULER_PARAMS:
+        if param in new and new[param] != current.get(param):
+            needs_scheduler = True
+
+    return needs_pipeline, needs_scheduler
+
+
+def run_worker(
+    jsonl_path: str,
+    defaults: dict[str, Any],
+    profiler: Optional[Profiler] = None,
+) -> None:
+    """Run the persistent JSONL worker.
+
+    Args:
+        jsonl_path: Path to the JSONL prompts file
+        defaults: Default parameters from CLI
+        profiler: Optional Profiler instance
+    """
+    from mage_mlx import MageFlowPipeline
+    from mage_mlx.embedding_cache import EmbeddingCache
+
+    # Load prompts
+    prompts = load_prompts(jsonl_path)
+    if not prompts:
+        print("No valid prompts found in JSONL file.")
+        return
+
+    print(f"Loaded {len(prompts)} prompts from {jsonl_path}")
+
+    # Initialize cache
+    cache = EmbeddingCache(defaults.get("model", "models/mage_flow_mlx"))
+
+    # Track current pipeline state
+    current_params: dict[str, Any] = {}
+    pipeline: Optional[MageFlowPipeline] = None
+    te_path: Optional[str] = None
+
+    for i, prompt_cfg in enumerate(prompts):
+        print(f"\n{'='*60}")
+        print(f"Prompt {i + 1}/{len(prompts)}")
+        print(f"{'='*60}")
+
+        # Merge with defaults
+        params = merge_params(defaults, prompt_cfg)
+
+        # Check if reload is needed
+        needs_pipeline, needs_scheduler = needs_reload(current_params, params)
+
+        if needs_pipeline or pipeline is None:
+            if profiler:
+                profiler.start("pipeline_reload")
+            print(f"  Loading pipeline (model={params['model']}, quantize={params.get('quantize')})...")
+            pipeline = MageFlowPipeline.from_pretrained(
+                model_dir=params["model"],
+                num_steps=params.get("steps", 4),
+                quantize=params.get("quantize"),
+                profiler=profiler,
+            )
+            te_path = os.path.join(params["model"], "text_encoder.safetensors")
+            if not os.path.exists(te_path):
+                te_path = None
+            current_params = dict(params)
+            if profiler:
+                profiler.stop("pipeline_reload")
+            print("  Pipeline loaded!")
+        elif needs_scheduler:
+            print(f"  Resetting scheduler (steps={params['steps']})...")
+            pipeline.scheduler.set_timesteps(params["steps"])
+            pipeline.num_steps = params["steps"]
+            current_params = dict(params)
+
+        # Generate
+        if profiler:
+            profiler.start(f"generation_{i + 1}")
+
+        # Check embedding cache
+        cache_key = cache.make_key(
+            prompt=params["prompt"],
+            negative_prompt=params.get("negative_prompt", " "),
+            te_path=te_path,
+        )
+        cached_embeds = cache.get(cache_key)
+
+        if cached_embeds is not None:
+            print(f"  Embedding cache HIT — skipping Qwen load/encode")
+            image = _generate_with_cached_embeds(
+                pipeline,
+                cached_embeds,
+                params,
+                profiler,
+            )
+        else:
+            print(f"  Embedding cache MISS — loading Qwen and encoding")
+            image = pipeline.generate(
+                prompt=params["prompt"],
+                height=params["height"],
+                width=params["width"],
+                seed=params["seed"],
+                guidance_scale=params["guidance"],
+                negative_prompt=params.get("negative_prompt", " "),
+                profiler=profiler,
+            )
+
+        if profiler:
+            profiler.stop(f"generation_{i + 1}")
+
+        # Save image
+        if profiler:
+            profiler.start(f"save_{i + 1}")
+        image.save(params["output"])
+        if profiler:
+            profiler.stop(f"save_{i + 1}")
+        print(f"  Saved to {params['output']}")
+
+    if profiler:
+        profiler.print_report("Mage-Flow MLX Worker — Full Run Profile")
+
+
+def _generate_with_cached_embeds(
+    pipeline,
+    cached_embeds: "mx.array",
+    params: dict[str, Any],
+    profiler: Optional[Profiler] = None,
+):
+    """Generate an image using cached text embeddings.
+
+    This bypasses the text encoder entirely by temporarily replacing
+    the text encoder's __call__ method to return cached embeddings.
+
+    Args:
+        pipeline: MageFlowPipeline instance
+        cached_embeds: Cached positive prompt embeddings [1, seq_len, 2560]
+        params: Generation parameters
+        profiler: Optional Profiler instance
+
+    Returns:
+        Generated PIL Image
+    """
+    # Save original text encoder call
+    original_call = pipeline.text_encoder.__call__
+
+    def cached_call(prompt_or_neg):
+        return cached_embeds
+
+    pipeline.text_encoder.__call__ = cached_call
+
+    try:
+        image = pipeline.generate(
+            prompt=params["prompt"],
+            height=params["height"],
+            width=params["width"],
+            seed=params["seed"],
+            guidance_scale=params["guidance"],
+            negative_prompt=params.get("negative_prompt", " "),
+            profiler=profiler,
+        )
+        return image
+    finally:
+        # Restore original
+        pipeline.text_encoder.__call__ = original_call
