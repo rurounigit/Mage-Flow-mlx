@@ -97,8 +97,8 @@ class EmbeddingCache:
         return hashlib.sha256(key_str.encode("utf-8")).hexdigest()
 
     def _cache_path(self, key: str) -> str:
-        """Return the .npy path for a given cache key."""
-        return os.path.join(self.cache_dir, f"{key}.npy")
+        """Return the .safetensors path for a given cache key."""
+        return os.path.join(self.cache_dir, f"{key}.safetensors")
 
     def _meta_path(self, key: str) -> str:
         """Return the .json metadata path for a given cache key."""
@@ -113,10 +113,10 @@ class EmbeddingCache:
         Returns:
             Cached [1, seq_len, 2560] BF16 array, or None
         """
-        npy_path = self._cache_path(key)
+        safetensors_path = self._cache_path(key)
         meta_path = self._meta_path(key)
 
-        if not os.path.exists(npy_path) or not os.path.exists(meta_path):
+        if not os.path.exists(safetensors_path) or not os.path.exists(meta_path):
             return None
 
         try:
@@ -127,7 +127,7 @@ class EmbeddingCache:
                 return None
 
             # Load the embedding
-            arr = mx.load(npy_path)
+            arr = mx.load(safetensors_path)
             return arr
         except (OSError, ValueError, json.JSONDecodeError):
             return None
@@ -139,16 +139,16 @@ class EmbeddingCache:
             key: Cache key from ``make_key()``
             embeds: [1, seq_len, 2560] BF16 array to cache
         """
-        npy_path = self._cache_path(key)
+        safetensors_path = self._cache_path(key)
         meta_path = self._meta_path(key)
 
         # Atomic write: save data first, then metadata
-        npy_temp = f"{npy_path}.tmp"
+        weights_temp = f"{safetensors_path}.tmp"
         meta_temp = f"{meta_path}.tmp"
 
         try:
-            mx.save(npy_temp, embeds)
-            os.replace(npy_temp, npy_path)
+            mx.save(weights_temp, embeds)
+            os.replace(weights_temp, safetensors_path)
 
             meta = {
                 "version": EMBEDDING_CACHE_VERSION,
@@ -160,7 +160,7 @@ class EmbeddingCache:
             os.replace(meta_temp, meta_path)
         except OSError:
             # Clean up temp files on failure
-            for path in (npy_temp, meta_temp):
+            for path in (weights_temp, meta_temp):
                 if os.path.exists(path):
                     os.remove(path)
             raise
@@ -169,11 +169,11 @@ class EmbeddingCache:
         """Remove all cached embeddings. Returns the number of entries removed."""
         count = 0
         for filename in os.listdir(self.cache_dir):
-            if filename.endswith(".npy"):
-                key = filename[:-4]
-                npy_path = self._cache_path(key)
+            if filename.endswith(".safetensors"):
+                key = filename[:-len(".safetensors")]
+                safetensors_path = self._cache_path(key)
                 meta_path = self._meta_path(key)
-                for path in (npy_path, meta_path):
+                for path in (safetensors_path, meta_path):
                     if os.path.exists(path):
                         os.remove(path)
                 count += 1
