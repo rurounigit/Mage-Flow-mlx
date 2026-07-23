@@ -67,6 +67,12 @@ def apply_rotary_emb_mageflow(x: mx.array, freqs_cis: mx.array) -> mx.array:
     # Accept either pre-computed (cos, sin) tuple or raw angle values
     if isinstance(freqs_cis, tuple):
         cos, sin = freqs_cis
+        # Ensure cos/sin are broadcastable with x_real [batch, seq, heads, dim//2]
+        # Cached cos/sin have shape [seq, dim//2]; unsqueeze to [seq, 1, dim//2]
+        if cos.ndim == 2:
+            cos = cos[:, None, :]
+        if sin.ndim == 2:
+            sin = sin[:, None, :]
     else:
         # freqs_cis has shape [N, D//2]; unsqueeze to broadcast with [N, H, D//2]
         angles = freqs_cis
