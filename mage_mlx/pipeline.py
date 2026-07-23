@@ -20,6 +20,7 @@ import numpy as np
 from PIL import Image
 
 from .dit import MageFlow, MageFlowParams
+from .loader import ensure_mlx_model
 from .scheduler import FlowMatchEulerDiscreteScheduler
 from .text_encoder import Qwen3VLTextEncoder
 from .vae import MageVAE
@@ -55,18 +56,20 @@ class MageFlowPipeline:
     @classmethod
     def from_pretrained(
         cls,
-        model_dir: str,
+        model_dir: str = "models/mage_flow_mlx",
         num_steps: int = 4,
     ) -> "MageFlowPipeline":
-        """Load a Mage-Flow MLX pipeline from a directory.
+        """Load a Mage-Flow MLX pipeline from a directory or HF repo ID.
 
         Args:
-            model_dir: Directory containing converted MLX weights
+            model_dir: Directory containing converted MLX weights or HF repo ID
             num_steps: Number of denoising steps
 
         Returns:
             MageFlowPipeline instance
         """
+        model_dir = ensure_mlx_model(model_dir)
+
         # Load DiT config
         import json
 
@@ -217,7 +220,7 @@ class MageFlowPipeline:
         """Apply memory-saving policies for constrained Macs.
 
         Based on alis-studio's VAE tiling pattern:
-        - Tile VAE decode for ≥1024² on ≤24GB Macs
+        - Tile VAE decode for >=1024^2 on <=24GB Macs
         - Otherwise use exact untiled decode
         """
         ram_gib = self._total_ram_gib()

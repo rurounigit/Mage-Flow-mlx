@@ -6,6 +6,7 @@ Usage:
     python generate.py --prompt "A futuristic cityscape at sunset"
     python generate.py --prompt "..." --steps 4 --height 1024 --width 1024 --seed 42
     python generate.py --prompt "..." --output output.png
+    python generate.py --prompt "..." --model microsoft/Mage-Flow-Turbo
 """
 
 from __future__ import annotations
@@ -13,9 +14,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-
-import mlx.core as mx
-from PIL import Image
+import traceback
 
 
 def main():
@@ -28,7 +27,7 @@ def main():
     )
     parser.add_argument(
         "--model", type=str, default="models/mage_flow_mlx",
-        help="Path to the BF16 MLX model directory"
+        help="Path to the BF16 MLX model directory or HuggingFace repo ID (e.g. microsoft/Mage-Flow-Turbo)"
     )
     parser.add_argument(
         "--steps", type=int, default=4,
@@ -71,21 +70,32 @@ def main():
         print(f"Error: guidance must be at least 1.0, got {args.guidance}")
         sys.exit(1)
 
-    # Check model directory
-    if not os.path.exists(args.model):
-        print(f"Error: Model directory '{args.model}' not found.")
-        print(f"Run 'python convert_weights.py' first to convert weights.")
+    # Load pipeline (auto-downloads and converts weights if needed)
+    print(f"Loading Mage-Flow MLX pipeline from {args.model}...")
+    print(f"  Current working directory: {os.getcwd()}")
+    print(f"  Python executable: {sys.executable}")
+
+    try:
+        from mage_mlx import MageFlowPipeline
+        print("  Imported MageFlowPipeline successfully")
+    except Exception as e:
+        print(f"  ERROR importing MageFlowPipeline: {e}")
+        traceback.print_exc()
         sys.exit(1)
 
-    # Load pipeline
-    print(f"Loading Mage-Flow MLX pipeline from {args.model}...")
-    from mage_mlx import MageFlowPipeline
     import time
 
-    pipeline = MageFlowPipeline.from_pretrained(
-        model_dir=args.model,
-        num_steps=args.steps,
-    )
+    try:
+        print(f"  Loading model from {args.model}...")
+        pipeline = MageFlowPipeline.from_pretrained(
+            model_dir=args.model,
+            num_steps=args.steps,
+        )
+        print("  Pipeline loaded successfully!")
+    except Exception as e:
+        print(f"  ERROR loading pipeline: {e}")
+        traceback.print_exc()
+        sys.exit(1)
 
     # Generate
     print(f"\nGenerating {args.height}x{args.width} image...")

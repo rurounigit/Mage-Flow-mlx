@@ -7,7 +7,7 @@ Native Apple Silicon port of Microsoft's **Mage-Flow** (4B MMDiT) using [MLX](ht
 Mage-Flow is a compact 4B-scale generative stack for text-to-image generation, built from:
 
 - **Mage-VAE** — lightweight high-fidelity latent tokenizer (16× downsample, 128 latent channels)
-- **NR-MMDiT** — 4B Native-Resolution Multimodal Diffusion Transformer (12 double-stream blocks, 2D multi-scale RoPE)
+- **NR-MMDiT** — 4B Native-Resolution Multimodal Diffusion Transformer (12 double_stream blocks, 2D multi-scale RoPE)
 - **Qwen3-VL** — text encoder (2560 hidden, 36 layers, 32Q/8KV heads)
 
 This port translates the PyTorch/CUDA implementation to native MLX, running entirely on Apple Silicon.
@@ -29,14 +29,36 @@ source .venv/bin/activate
 # 2. Install dependencies
 uv pip install mlx mlx-lm safetensors torch huggingface_hub pillow numpy regex
 
-# 3. Convert weights to native BF16 (downloads the model if needed)
-python convert_weights.py
-
-# 4. Generate an image
+# 3. Generate an image (auto-downloads and converts weights on first run)
 python generate.py --prompt "A futuristic cityscape at sunset, photorealistic"
 ```
 
 The converted model preserves the original BF16 precision. Quantized inference is intentionally unsupported because both 4-bit and 8-bit DiT quantization caused substantial quality loss.
+
+### Automatic Model Download & Conversion
+
+You no longer need to run `convert_weights.py` manually. When you run `generate.py`, the pipeline will:
+
+1. Check if converted MLX weights exist locally (default: `models/mage_flow_mlx/`)
+2. If missing, automatically download the raw PyTorch weights from HuggingFace (`microsoft/Mage-Flow-Turbo`)
+3. Convert them to native MLX BF16 format on-the-fly
+4. Cache the converted weights for instant startup on subsequent runs
+
+You can also explicitly pass a HuggingFace repo ID:
+
+```bash
+# Uses microsoft/Mage-Flow-Turbo (auto-downloads and converts on first run)
+python generate.py --model microsoft/Mage-Flow-Turbo --prompt "..."
+
+# Or use a local converted directory
+python generate.py --model models/mage_flow_mlx --prompt "..."
+```
+
+If you prefer to pre-convert weights manually (e.g., for offline use or custom repos), you can still use:
+
+```bash
+python convert_weights.py --repo microsoft/Mage-Flow-Turbo --output models/mage_flow_mlx
+```
 
 ## Generation parameters
 
@@ -47,7 +69,7 @@ python generate.py [OPTIONS]
 | Parameter | Default | Description |
 |---|---:|---|
 | `--prompt TEXT` | required | Description of the image to generate. Concrete subjects, composition, lighting, and style generally produce the most predictable result. |
-| `--model PATH` | `models/mage_flow_mlx` | Directory containing `transformer.safetensors`, `text_encoder.safetensors`, `vae.safetensors`, and `transformer_config.json`. Only BF16-converted weights are supported. |
+| `--model PATH` | `models/mage_flow_mlx` | Directory containing converted MLX weights, or a HuggingFace repo ID (e.g. `microsoft/Mage-Flow-Turbo`). On first run, weights are auto-downloaded and converted. |
 | `--steps INTEGER` | `4` | Number of flow-matching denoising steps. Mage-Flow-Turbo is trained for four steps; increasing this is not guaranteed to improve quality and changes the scheduler trajectory. |
 | `--height INTEGER` | `1024` | Output height in pixels. Must be a positive multiple of 16. Higher resolutions require more unified memory and take longer. |
 | `--width INTEGER` | `1024` | Output width in pixels. Must be a positive multiple of 16. Non-square aspect ratios are supported. |
@@ -69,19 +91,11 @@ python generate.py \
   --width 768 --height 1024 --seed 123 \
   --output astronaut.png
 
-# Disable CFG to reduce runtime and memory use
-python generate.py \
-  --prompt "A watercolor landscape" \
-  --guidance 1
-
 # Use a negative prompt
 python generate.py \
   --prompt "Product photograph of a wristwatch on black velvet" \
   --negative-prompt "blurry, distorted, text, watermark" \
-  --guidance 5
 ```
-
-At CFG 5 the transformer runs twice per denoising step, once for the prompt and once for the negative branch. The text encoder is unloaded immediately after producing both embeddings, leaving memory available for the BF16 DiT at 1024×1024.
 
 ## Architecture
 
@@ -115,10 +129,11 @@ The text encoder and DiT briefly coexist while prompts are encoded. Afterward, t
 ```
 mage-flow-mlx/
 ├── pyproject.toml          # Project configuration
-├── convert_weights.py      # PyTorch BF16 → MLX BF16 conversion
+├── convert_weights.py      # PyTorch BF16 → MLX BF16 conversion (manual, optional)
 ├── generate.py             # CLI for text-to-image generation
 ├── mage_mlx/
 │   ├── __init__.py         # Package exports
+│   ├── loader.py           # Auto-download & conversion with caching
 │   ├── rope.py             # 2D multi-scale RoPE (MageFlowEmbedRope)
 │   ├── timestep.py         # Timestep embedding (qwen_proj style)
 │   ├── dit.py              # MageFlow DiT (12 double-stream MMDiT blocks)
