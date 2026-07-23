@@ -31,3 +31,47 @@
 - BF16 conversion: DiT 397 tensors/8.23 GB, text encoder 398 tensors/8.04 GB, VAE 728 tensors/0.28 GB; all tensors are BF16.
 - BF16 1024×1024 generation: 36.34 seconds, 16.96 GB peak footprint, zero swap.
 - Visual BF16 result: coherent cityscape with materially sharper structures and fine detail than the 8-bit output.
+
+## 2026-07-23 — Experimental runtime quantization follow-up
+
+### Failure chain
+
+1. An earlier quantization attempt overwrote `transformer.safetensors` with a
+   packed checkpoint (745 tensors, `uint32` `img_in.weight` shaped `[3072, 16]`).
+2. The pipeline instantiated regular `nn.Linear` layers and loaded the packed
+   arrays into them, causing either dtype errors or `mx.addmm` shape failures.
+3. Manual calls to `Linear.to_quantized()` packed weights but did not reliably
+   replace every module in the model tree.
+4. Quantizing every valid DiT linear layer generated structurally scrambled blue
+   noise. Initial attention/MLP and MLP-only policies also showed structured
+   artifacts because both still included the pathological final image MLP.
+
+### Corrections
+
+- Restored the canonical 397-tensor, 7.7 GiB BF16 transformer from the local
+  Hugging Face source checkpoint.
+- Added safetensors-header validation so a packed checkpoint cannot be accepted
+  as the BF16 base cache.
+- Made conversion atomic with a temporary `.safetensors` file and `os.replace`.
+- Runtime quantization now uses `nn.quantize(..., class_predicate=...)`, which
+  replaces matching `nn.Linear` modules with `nn.QuantizedLinear` correctly.
+- Layer-by-layer tracing identified `transformer_blocks.11.img_mlp.fc1` as the
+  pathological layer. Quantizing that layer alone caused 49.7% relative error
+  in the final velocity prediction (cosine similarity 0.903).
+- Four-bit mode quantizes 143 block attention/MLP matrices while preserving
+  modulation, boundary/timestep/norm/output projections and the pathological
+  final image MLP expansion in BF16.
+
+### Verification
+
+- BF16 cache: 397 tensors; `img_in.weight` is BF16 `[3072, 128]`; no
+  `.scales`/`.biases` quantization state.
+- BF16 1024×1024 portrait: coherent and prompt-faithful, 18.26 seconds.
+- Full quantization: catastrophic scrambled output.
+- Single-layer quantization used the correct packing/layout path; group size 32
+  produced lower weight/output error than 64 or 128.
+- Quantizing blocks 0–10 fc1 layers accumulated gradually to 10.9% final-output
+  error. Adding block 11 image fc1 jumped to 48.8%; block 11 text fc1 alone had
+  no effect on the image output.
+- Corrected broad 4-bit policy (143 layers, sensitive layer excluded): coherent,
+  prompt-faithful portrait without structured artifacts, 16.19 seconds.

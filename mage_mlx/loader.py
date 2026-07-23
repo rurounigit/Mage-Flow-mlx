@@ -5,11 +5,67 @@ from __future__ import annotations
 import gc
 import json
 import os
+import struct
 
 import mlx.core as mx
 import torch
 from huggingface_hub import snapshot_download
 from safetensors import safe_open
+
+
+def _read_safetensors_header(path: str) -> dict:
+    """Read safetensors metadata without loading checkpoint tensors."""
+    with open(path, "rb") as f:
+        header_length_bytes = f.read(8)
+        if len(header_length_bytes) != 8:
+            raise ValueError(f"Invalid safetensors header in {path}")
+        header_length = struct.unpack("<Q", header_length_bytes)[0]
+        # Safetensors headers are small JSON documents. Bound the value before
+        # reading so arbitrary/non-safetensors files cannot request huge memory.
+        if header_length <= 0 or header_length > 100 * 1024 * 1024:
+            raise ValueError(f"Invalid safetensors header length in {path}")
+        return json.loads(f.read(header_length))
+
+
+def is_unquantized_transformer(path: str) -> bool:
+    """Return whether a checkpoint contains the expected floating DiT weights."""
+    if not os.path.exists(path):
+        return False
+    try:
+        header = _read_safetensors_header(path)
+        img_weight = header.get("img_in.weight", {})
+        dtype = img_weight.get("dtype")
+        shape = img_weight.get("shape")
+        has_quantization_state = any(
+            key.endswith((".scales", ".biases")) for key in header
+        )
+        return (
+            dtype in {"BF16", "F16", "F32"}
+            and shape == [3072, 128]
+            and not has_quantization_state
+        )
+    except (OSError, ValueError, json.JSONDecodeError, struct.error):
+        return False
+
+
+def _cached_repo_snapshot(repo_id: str) -> str | None:
+    """Resolve an existing Hugging Face snapshot even if optional files are absent."""
+    cache_root = os.environ.get(
+        "HF_HUB_CACHE",
+        os.path.join(os.path.expanduser("~"), ".cache", "huggingface", "hub"),
+    )
+    repo_cache = os.path.join(cache_root, f"models--{repo_id.replace('/', '--')}")
+    ref_path = os.path.join(repo_cache, "refs", "main")
+    try:
+        with open(ref_path) as f:
+            commit = f.read().strip()
+    except OSError:
+        return None
+    snapshot = os.path.join(repo_cache, "snapshots", commit)
+    source = os.path.join(
+        snapshot, "transformer", "diffusion_pytorch_model.safetensors"
+    )
+    return snapshot if os.path.exists(source) else None
 
 
 def torch_to_mlx(tensor: torch.Tensor) -> mx.array:
@@ -25,7 +81,7 @@ def process_and_convert_file(
     out_path: str,
     key_mapper_fn,
 ) -> None:
-    """Convert one source checkpoint while preserving BF16 tensors."""
+    """Convert one source checkpoint atomically while preserving BF16 tensors."""
     converted = {}
     with safe_open(safetensors_path, framework="pt") as f:
         keys = list(f.keys())
@@ -47,7 +103,10 @@ def process_and_convert_file(
             del tensor, arr
             gc.collect()
 
-    mx.save_safetensors(out_path, converted)
+    root, extension = os.path.splitext(out_path)
+    temp_path = f"{root}.tmp{extension}"
+    mx.save_safetensors(temp_path, converted)
+    os.replace(temp_path, out_path)
     print(f"  Saved: {out_path} ({os.path.getsize(out_path) / 1e6:.1f} MB)")
     del converted
     gc.collect()
@@ -113,117 +172,128 @@ def map_vae_key(key: str) -> str | None:
     return key
 
 
-def ensure_mlx_model(model_path_or_repo: str = "models/mage_flow_mlx") -> str:
+def ensure_mlx_model(
+    model_path_or_repo: str = "models/mage_flow_mlx",
+    quantize: int | None = None,
+) -> tuple[str, int | None]:
     """Ensure that converted MLX model weights exist at model_path_or_repo.
 
     If model_path_or_repo is a Hugging Face repo ID or a local path lacking converted weights,
     downloads and converts weights automatically on-the-fly, caching them locally.
+
+    Args:
+        model_path_or_repo: Local path or HF repo ID
+        quantize: If set (4 or 8), quantize transformer weights to N bits (applied at runtime via nn.quantize)
+
+    Returns:
+        Tuple of (model_dir, quantize) where quantize is the actual quantization
+        level that will be used
     """
     required_files = ["transformer.safetensors", "vae.safetensors", "transformer_config.json"]
 
     # Determine output directory and repo ID
-    # If the path contains "/" and doesn't exist locally, treat it as an HF repo ID
-    # A local path like "models/mage_flow_mlx" also contains "/" but exists locally
-    # A HF repo ID like "microsoft/Mage-Flow-Turbo" contains "/" and doesn't exist locally
-    # But we need to distinguish: "models/mage_flow_mlx" (local) vs "microsoft/Mage-Flow-Turbo" (HF)
-    # HF repo IDs have a slash and don't exist as local paths
-    # Local paths that don't exist yet should NOT be treated as HF repo IDs
-    # Only treat as HF repo ID if it looks like an HF repo ID (contains "/" and doesn't start with "models/")
     if "/" in model_path_or_repo and not os.path.exists(model_path_or_repo) and not model_path_or_repo.startswith("models/"):
-        # Treated as HF repo ID (e.g. "microsoft/Mage-Flow-Turbo")
         repo_id = model_path_or_repo
-        # Use a sanitized local dir name based on the repo ID
         safe_name = model_path_or_repo.replace("/", "_")
         output_dir = os.path.join("models", safe_name)
     else:
-        # Local path provided (may or may not have converted weights yet)
         output_dir = model_path_or_repo
         repo_id = "microsoft/Mage-Flow-Turbo"
 
-    # Check if all required converted files exist
-    all_exist = all(os.path.exists(os.path.join(output_dir, f)) for f in required_files)
-    if all_exist:
-        return output_dir
-
-    print(f"🔄 Converted MLX weights not found in '{output_dir}'.")
-    print(f"📥 Downloading and converting weights from {repo_id} (this happens only once)...")
-
-    os.makedirs(output_dir, exist_ok=True)
-    print(f"  Downloading from HuggingFace: {repo_id}...")
-    print("  This may take a while (17GB of weights)...")
-    repo_dir = snapshot_download(
-        repo_id,
-        allow_patterns=["*.safetensors", "*.json", "*.txt"],
+    # A quantized checkpoint cannot be loaded into the model's nn.Linear layers.
+    # Validate the base checkpoint's format, not just its presence.
+    transformer_out = os.path.join(output_dir, "transformer.safetensors")
+    transformer_valid = is_unquantized_transformer(transformer_out)
+    other_files_exist = all(
+        os.path.exists(os.path.join(output_dir, f))
+        for f in required_files
+        if f != "transformer.safetensors"
     )
-    print(f"  Downloaded to: {repo_dir}")
+    all_exist = transformer_valid and other_files_exist
+    if not all_exist:
+        print(f"🔄 Converted MLX weights not found in '{output_dir}'.")
+        print(f"📥 Downloading and converting weights from {repo_id} (this happens only once)...")
 
-    # 1. DiT weights & config
-    print("Converting DiT weights...")
-    dit_path = os.path.join(repo_dir, "transformer", "diffusion_pytorch_model.safetensors")
-    if os.path.exists(dit_path):
-        process_and_convert_file(
-            dit_path,
-            os.path.join(output_dir, "transformer.safetensors"),
-            key_mapper_fn=map_dit_key,
+        os.makedirs(output_dir, exist_ok=True)
+        print(f"  Downloading from HuggingFace: {repo_id}...")
+        print("  This may take a while (17GB of weights)...")
+        repo_dir = _cached_repo_snapshot(repo_id) or snapshot_download(
+            repo_id,
+            allow_patterns=["*.safetensors", "*.json", "*.txt"],
         )
+        print(f"  Downloaded to: {repo_dir}")
 
-    dit_config_src = os.path.join(repo_dir, "transformer", "config.json")
-    if os.path.exists(dit_config_src):
-        with open(dit_config_src) as f:
-            dit_config = json.load(f)
-        with open(os.path.join(output_dir, "transformer_config.json"), "w") as f:
-            json.dump(dit_config, f, indent=2)
+        # 1. DiT weights & config
+        print("Converting DiT weights...")
+        dit_path = os.path.join(repo_dir, "transformer", "diffusion_pytorch_model.safetensors")
+        if not transformer_valid and os.path.exists(dit_path):
+            process_and_convert_file(
+                dit_path,
+                transformer_out,
+                key_mapper_fn=map_dit_key,
+            )
 
-    with open(os.path.join(output_dir, "precision_config.json"), "w") as f:
-        json.dump(
-            {
-                "transformer_dtype": "bfloat16",
-                "text_encoder_dtype": "bfloat16",
-                "vae_dtype": "bfloat16",
-            },
-            f,
-            indent=2,
-        )
+        dit_config_src = os.path.join(repo_dir, "transformer", "config.json")
+        if os.path.exists(dit_config_src):
+            with open(dit_config_src) as f:
+                dit_config = json.load(f)
+            with open(os.path.join(output_dir, "transformer_config.json"), "w") as f:
+                json.dump(dit_config, f, indent=2)
 
-    # 2. VAE weights
-    print("Converting VAE weights...")
-    vae_path = os.path.join(repo_dir, "vae", "diffusion_pytorch_model.safetensors")
-    if os.path.exists(vae_path):
-        process_and_convert_file(
-            vae_path,
-            os.path.join(output_dir, "vae.safetensors"),
-            key_mapper_fn=map_vae_key,
-        )
+        with open(os.path.join(output_dir, "precision_config.json"), "w") as f:
+            json.dump(
+                {
+                    "transformer_dtype": "bfloat16",
+                    "text_encoder_dtype": "bfloat16",
+                    "vae_dtype": "bfloat16",
+                },
+                f,
+                indent=2,
+            )
 
-    # 3. Text Encoder weights
-    print("Converting Text Encoder weights...")
-    te_dir = os.path.join(repo_dir, "text_encoder")
-    mlx_te = {}
-    if os.path.exists(te_dir):
-        for shard in sorted(os.listdir(te_dir)):
-            if shard.endswith(".safetensors"):
-                shard_path = os.path.join(te_dir, shard)
-                with safe_open(shard_path, framework="pt") as f:
-                    for key in list(f.keys()):
-                        if "vision_tower" in key:
-                            continue
-                        t = f.get_tensor(key)
-                        mapped_key = map_text_encoder_key(key)
-                        if mapped_key is None:
-                            del t
-                            continue
-                        mx_arr = torch_to_mlx(t)
-                        mx.eval(mx_arr)
-                        mlx_te[mapped_key] = mx_arr
-                        del t, mx_arr
-                        gc.collect()
+        # 2. VAE weights
+        print("Converting VAE weights...")
+        vae_path = os.path.join(repo_dir, "vae", "diffusion_pytorch_model.safetensors")
+        vae_out_path = os.path.join(output_dir, "vae.safetensors")
+        if not os.path.exists(vae_out_path) and os.path.exists(vae_path):
+            process_and_convert_file(
+                vae_path,
+                vae_out_path,
+                key_mapper_fn=map_vae_key,
+            )
 
-    te_out_path = os.path.join(output_dir, "text_encoder.safetensors")
-    if mlx_te:
-        mx.save_safetensors(te_out_path, mlx_te)
-        print(f"  Saved: {te_out_path} ({os.path.getsize(te_out_path) / 1e6:.1f} MB)")
-    del mlx_te
-    gc.collect()
+        # 3. Text Encoder weights
+        print("Converting Text Encoder weights...")
+        te_dir = os.path.join(repo_dir, "text_encoder")
+        mlx_te = {}
+        te_out_path = os.path.join(output_dir, "text_encoder.safetensors")
+        if not os.path.exists(te_out_path) and os.path.exists(te_dir):
+            for shard in sorted(os.listdir(te_dir)):
+                if shard.endswith(".safetensors"):
+                    shard_path = os.path.join(te_dir, shard)
+                    with safe_open(shard_path, framework="pt") as f:
+                        for key in list(f.keys()):
+                            if "vision_tower" in key:
+                                continue
+                            t = f.get_tensor(key)
+                            mapped_key = map_text_encoder_key(key)
+                            if mapped_key is None:
+                                del t
+                                continue
+                            mx_arr = torch_to_mlx(t)
+                            mx.eval(mx_arr)
+                            mlx_te[mapped_key] = mx_arr
+                            del t, mx_arr
+                            gc.collect()
 
-    print(f"✅ Auto-conversion complete! Weights cached at {output_dir}")
-    return output_dir
+        if mlx_te:
+            mx.save_safetensors(te_out_path, mlx_te)
+            print(f"  Saved: {te_out_path} ({os.path.getsize(te_out_path) / 1e6:.1f} MB)")
+        del mlx_te
+        gc.collect()
+
+        print(f"✅ Auto-conversion complete! Weights cached at {output_dir}")
+    else:
+        print(f"✅ Loaded cached MLX weights from {output_dir}")
+
+    return output_dir, quantize

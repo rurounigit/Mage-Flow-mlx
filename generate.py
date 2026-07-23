@@ -7,6 +7,7 @@ Usage:
     python generate.py --prompt "..." --steps 4 --height 1024 --width 1024 --seed 42
     python generate.py --prompt "..." --output output.png
     python generate.py --prompt "..." --model microsoft/Mage-Flow-Turbo
+    python generate.py --prompt "..." --quantize 4
 """
 
 from __future__ import annotations
@@ -57,6 +58,10 @@ def main():
         "--output", type=str, default="output.png",
         help="Output image path"
     )
+    parser.add_argument(
+        "--quantize", type=int, default=None, choices=[4, 8],
+        help="Quantize supported DiT layers to 4 or 8 bits in memory"
+    )
     args = parser.parse_args()
 
     # Validate dimensions
@@ -90,6 +95,7 @@ def main():
         pipeline = MageFlowPipeline.from_pretrained(
             model_dir=args.model,
             num_steps=args.steps,
+            quantize=args.quantize,
         )
         print("  Pipeline loaded successfully!")
     except Exception as e:

@@ -33,7 +33,8 @@ uv pip install mlx mlx-lm safetensors torch huggingface_hub pillow numpy regex
 python generate.py --prompt "A futuristic cityscape at sunset, photorealistic"
 ```
 
-The converted model preserves the original BF16 precision. Quantized inference is intentionally unsupported because both 4-bit and 8-bit DiT quantization caused substantial quality loss.
+The converted model preserves the original BF16 precision. Optional runtime
+quantization keeps sensitive conditioning and final-block layers in BF16.
 
 ### Automatic Model Download & Conversion
 
@@ -77,6 +78,8 @@ python generate.py [OPTIONS]
 | `--guidance FLOAT` | `1.0` | Classifier-free guidance (CFG) scale. `1.0` disables CFG and performs one DiT pass per step. Values above 1 strengthen prompt adherence but very high values can oversaturate or reduce natural detail. |
 | `--negative-prompt TEXT` | one space (`" "`) | Text for the unconditional/negative CFG branch. It is only used when `--guidance` is greater than 1. |
 | `--output PATH` | `output.png` | Destination image path. The format is inferred from the extension by Pillow. |
+| `--quantize INT` | none | Quantize supported DiT attention/MLP layers to 4 or 8 bits in memory. The cached checkpoint remains BF16. Boundary, modulation, and the numerically sensitive final image MLP expansion stay BF16. |
+
 
 ### Examples
 
@@ -111,7 +114,7 @@ python generate.py \
 - **Conv2d weights**: `[Out, In, H, W]` → `[Out, H, W, In]` (NHWC layout)
 - **2D RoPE**: Complex-number rotary embeddings with 3 axes (frame=16, height=56, width=56)
 - **Joint attention**: Text+image tokens packed, single SDPA forward
-- **Precision**: Original BF16 weights are preserved without quantization.
+- **Precision**: The cached weights remain BF16. Optional quantization is applied in memory after loading and never overwrites the BF16 cache.
 
 ## Memory Budget (24 GB MacBook Air M5)
 

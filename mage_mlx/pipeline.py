@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import gc
 import os
-from typing import Any
 
 import mlx.core as mx
+import mlx.nn as nn
 import numpy as np
 from PIL import Image
 
@@ -24,6 +24,29 @@ from .loader import ensure_mlx_model
 from .scheduler import FlowMatchEulerDiscreteScheduler
 from .text_encoder import Qwen3VLTextEncoder
 from .vae import MageVAE
+
+
+def should_quantize_dit_layer(path: str, module: nn.Module) -> bool:
+    """Select quality-safe DiT layers for runtime weight quantization."""
+    if not isinstance(module, nn.Linear):
+        return False
+
+    in_features = module.weight.shape[1]
+    shape_is_supported = in_features >= 32 and in_features % 32 == 0
+    is_transformer_block = path.startswith("transformer_blocks.")
+    is_conditioning_projection = ".img_mod" in path or ".txt_mod" in path
+    is_sensitive_final_image_mlp = (
+        path == "transformer_blocks.11.img_mlp.fc1"
+    )
+
+    # The final image-stream fc1 is uniquely sensitive: quantizing it alone
+    # causes approximately 50% relative error in the final prediction.
+    return (
+        shape_is_supported
+        and is_transformer_block
+        and not is_conditioning_projection
+        and not is_sensitive_final_image_mlp
+    )
 
 
 class MageFlowPipeline:
@@ -58,17 +81,19 @@ class MageFlowPipeline:
         cls,
         model_dir: str = "models/mage_flow_mlx",
         num_steps: int = 4,
+        quantize: int | None = None,
     ) -> "MageFlowPipeline":
         """Load a Mage-Flow MLX pipeline from a directory or HF repo ID.
 
         Args:
             model_dir: Directory containing converted MLX weights or HF repo ID
             num_steps: Number of denoising steps
+            quantize: If set (4 or 8), quantize transformer weights to N bits
 
         Returns:
             MageFlowPipeline instance
         """
-        model_dir = ensure_mlx_model(model_dir)
+        model_dir, actual_quantize = ensure_mlx_model(model_dir, quantize=quantize)
 
         # Load DiT config
         import json
@@ -89,14 +114,34 @@ class MageFlowPipeline:
         )
         transformer = MageFlow(params)
 
-        # Load DiT weights
+        # Load DiT weights (always load BF16 first)
         dit_weights_path = os.path.join(model_dir, "transformer.safetensors")
         if os.path.exists(dit_weights_path):
             weights = mx.load(dit_weights_path)
-            if any(key.endswith((".scales", ".biases")) for key in weights):
-                raise ValueError("Quantized DiT weights are unsupported; reconvert in BF16")
             transformer.load_weights(list(weights.items()), strict=False)
             print(f"  Loaded DiT: {len(weights)} tensors (BF16)")
+
+        # Apply quantization at runtime using MLX's native nn.quantize
+        # This automatically replaces nn.Linear layers with nn.QuantizedLinear
+        if actual_quantize in (4, 8):
+            print(f"  Quantizing DiT to {actual_quantize}-bit...")
+            # Use nn.quantize with class_predicate to properly replace nn.Linear
+            # with nn.QuantizedLinear in-place. This ensures QuantizedLinear.__call__
+            # handles unpacking during inference instead of nn.Linear.__call__.
+            nn.quantize(
+                transformer,
+                bits=actual_quantize,
+                group_size=32,
+                class_predicate=should_quantize_dit_layer,
+            )
+            quantized_layers = sum(
+                isinstance(module, nn.QuantizedLinear)
+                for _, module in transformer.named_modules()
+            )
+            print(
+                f"  DiT quantized ({actual_quantize}-bit, "
+                f"{quantized_layers} attention/MLP layers)"
+            )
 
         # Load VAE
         vae_weights_path = os.path.join(model_dir, "vae.safetensors")
