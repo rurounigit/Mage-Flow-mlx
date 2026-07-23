@@ -287,6 +287,16 @@ def run_worker(
 
         if profiler:
             profiler.stop(f"generation_{i + 1}")
+            profiler.set_metadata(
+                f"generation_{i + 1}",
+                "resolution",
+                f"{params['width']}x{params['height']}",
+            )
+            profiler.set_metadata(
+                f"generation_{i + 1}",
+                "steps",
+                str(params["steps"]),
+            )
 
         # Save image
         if profiler:

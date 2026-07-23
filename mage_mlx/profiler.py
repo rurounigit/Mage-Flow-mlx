@@ -32,6 +32,7 @@ class PhaseRecord:
     name: str
     elapsed: float
     peak_rss_gib: Optional[float] = None
+    metadata: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -107,6 +108,18 @@ class Profiler:
                 return rec.elapsed
         return None
 
+    def set_metadata(self, name: str, key: str, value: str) -> None:
+        """Attach a metadata key-value pair to a named phase record.
+
+        Useful for annotating phases with context like resolution or steps.
+        """
+        if not self.enabled:
+            return
+        for rec in self._records:
+            if rec.name == name:
+                rec.metadata[key] = value
+                return
+
     def total_elapsed(self) -> float:
         """Return total elapsed time across all recorded phases."""
         return sum(r.elapsed for r in self._records)
@@ -126,7 +139,10 @@ class Profiler:
 
         for rec in self._records:
             rss_str = f"{rec.peak_rss_gib:>14.2f}" if rec.peak_rss_gib is not None else "              N/A"
-            lines.append(f"  {rec.name:<40} {rec.elapsed:>10.4f}   {rss_str}")
+            meta_str = ""
+            if rec.metadata:
+                meta_str = "  " + " ".join(f"{k}={v}" for k, v in rec.metadata.items())
+            lines.append(f"  {rec.name:<40} {rec.elapsed:>10.4f}   {rss_str}{meta_str}")
 
         # Show wall-clock total (not sum of phases, which double-counts
         # nested phases like generation_N that include dit_step_N children).
