@@ -75,3 +75,22 @@
   no effect on the image output.
 - Corrected broad 4-bit policy (143 layers, sensitive layer excluded): coherent,
   prompt-faithful portrait without structured artifacts, 16.19 seconds.
+
+### Persistent quantized caches
+
+- Added lazy, separate `transformer_quant4.safetensors` and
+  `transformer_quant8.safetensors` caches; canonical BF16 remains immutable.
+- Added sidecar JSON metadata containing format, policy version, bit depth,
+  group size, mode, sensitive exclusions, and BF16 source size/mtime signature.
+- Cache files are validated by metadata and representative packed/BF16 tensor
+  headers. Stale or incompatible caches are rebuilt from BF16.
+- Writes are atomic: packed weights are completed first, then metadata is
+  published. Missing metadata prevents an incomplete cache from being used.
+- Loading a valid cache quantizes the empty model structure first and then loads
+  packed `weight`, `scales`, and `biases`, matching MFlux's stored-quantized order.
+- 4-bit cache: 4.548 GB; 8-bit cache: 5.889 GB (decimal sizes).
+- Freshly quantized versus cache-reloaded DiT outputs had max absolute difference
+  `0.0` for both 4-bit and 8-bit variants.
+- Normal pipeline reuse was verified for both variants. Cached 4-bit CLI
+  generation remained visually coherent and completed denoising/decoding in
+  15.97 seconds.

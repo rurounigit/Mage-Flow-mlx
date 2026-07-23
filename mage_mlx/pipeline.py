@@ -12,6 +12,7 @@ Usage:
 from __future__ import annotations
 
 import gc
+import json
 import os
 
 import mlx.core as mx
@@ -20,10 +21,15 @@ import numpy as np
 from PIL import Image
 
 from .dit import MageFlow, MageFlowParams
-from .loader import ensure_mlx_model
+from .loader import _read_safetensors_header, ensure_mlx_model
 from .scheduler import FlowMatchEulerDiscreteScheduler
 from .text_encoder import Qwen3VLTextEncoder
 from .vae import MageVAE
+
+
+QUANTIZATION_POLICY_VERSION = 1
+QUANTIZATION_GROUP_SIZE = 32
+SUPPORTED_QUANTIZATION_BITS = (4, 8)
 
 
 def should_quantize_dit_layer(path: str, module: nn.Module) -> bool:
@@ -47,6 +53,90 @@ def should_quantize_dit_layer(path: str, module: nn.Module) -> bool:
         and not is_conditioning_projection
         and not is_sensitive_final_image_mlp
     )
+
+
+def _quantized_cache_paths(model_dir: str, bits: int) -> tuple[str, str]:
+    """Return packed-weight and metadata paths for a quantization level."""
+    stem = os.path.join(model_dir, f"transformer_quant{bits}")
+    return f"{stem}.safetensors", f"{stem}.json"
+
+
+def _base_checkpoint_signature(path: str) -> dict[str, int]:
+    """Return a cheap signature used to invalidate derived quantized caches."""
+    stat = os.stat(path)
+    return {"size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
+
+
+def _expected_quantization_metadata(base_path: str, bits: int) -> dict:
+    """Build metadata that uniquely identifies the current packed layout."""
+    return {
+        "format": "mage-flow-mlx-quantized-transformer",
+        "policy_version": QUANTIZATION_POLICY_VERSION,
+        "bits": bits,
+        "group_size": QUANTIZATION_GROUP_SIZE,
+        "mode": "affine",
+        "base_checkpoint": _base_checkpoint_signature(base_path),
+        "excluded_layers": ["transformer_blocks.11.img_mlp.fc1"],
+    }
+
+
+def _is_valid_quantized_cache(
+    weights_path: str,
+    metadata_path: str,
+    expected_metadata: dict,
+) -> bool:
+    """Validate metadata and representative packed/BF16 tensor layouts."""
+    if not os.path.exists(weights_path) or not os.path.exists(metadata_path):
+        return False
+    try:
+        with open(metadata_path) as f:
+            if json.load(f) != expected_metadata:
+                return False
+        header = _read_safetensors_header(weights_path)
+        packed = header.get("transformer_blocks.0.attn.to_q.weight", {})
+        packed_scales = header.get("transformer_blocks.0.attn.to_q.scales", {})
+        excluded = header.get("transformer_blocks.11.img_mlp.fc1.weight", {})
+        packed_width = 3072 * expected_metadata["bits"] // 32
+        return (
+            packed.get("dtype") == "U32"
+            and packed.get("shape") == [3072, packed_width]
+            and packed_scales.get("dtype") in {"BF16", "F16", "F32"}
+            and excluded.get("dtype") in {"BF16", "F16", "F32"}
+            and excluded.get("shape") == [12288, 3072]
+        )
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+
+
+def _quantize_transformer(transformer: MageFlow, bits: int) -> int:
+    """Replace quality-safe DiT Linear layers with QuantizedLinear layers."""
+    nn.quantize(
+        transformer,
+        bits=bits,
+        group_size=QUANTIZATION_GROUP_SIZE,
+        class_predicate=should_quantize_dit_layer,
+    )
+    return sum(
+        isinstance(module, nn.QuantizedLinear)
+        for _, module in transformer.named_modules()
+    )
+
+
+def _save_quantized_cache(
+    transformer: MageFlow,
+    weights_path: str,
+    metadata_path: str,
+    metadata: dict,
+) -> None:
+    """Atomically save packed model weights followed by compatibility metadata."""
+    weights_root, weights_extension = os.path.splitext(weights_path)
+    weights_temp = f"{weights_root}.tmp{weights_extension}"
+    metadata_temp = f"{metadata_path}.tmp"
+    transformer.save_weights(weights_temp)
+    os.replace(weights_temp, weights_path)
+    with open(metadata_temp, "w") as f:
+        json.dump(metadata, f, indent=2, sort_keys=True)
+    os.replace(metadata_temp, metadata_path)
 
 
 class MageFlowPipeline:
@@ -93,11 +183,14 @@ class MageFlowPipeline:
         Returns:
             MageFlowPipeline instance
         """
+        if quantize is not None and quantize not in SUPPORTED_QUANTIZATION_BITS:
+            raise ValueError(
+                "quantize must be None, 4, or 8; "
+                f"received {quantize}"
+            )
         model_dir, actual_quantize = ensure_mlx_model(model_dir, quantize=quantize)
 
         # Load DiT config
-        import json
-
         config_path = os.path.join(model_dir, "transformer_config.json")
         with open(config_path) as f:
             dit_config = json.load(f)
@@ -114,34 +207,52 @@ class MageFlowPipeline:
         )
         transformer = MageFlow(params)
 
-        # Load DiT weights (always load BF16 first)
+        # Load canonical BF16 or a compatible persistent packed cache.
         dit_weights_path = os.path.join(model_dir, "transformer.safetensors")
-        if os.path.exists(dit_weights_path):
+        if actual_quantize in SUPPORTED_QUANTIZATION_BITS:
+            quantized_path, quantized_metadata_path = _quantized_cache_paths(
+                model_dir, actual_quantize
+            )
+            expected_metadata = _expected_quantization_metadata(
+                dit_weights_path, actual_quantize
+            )
+            cache_is_valid = _is_valid_quantized_cache(
+                quantized_path,
+                quantized_metadata_path,
+                expected_metadata,
+            )
+            if cache_is_valid:
+                quantized_layers = _quantize_transformer(
+                    transformer, actual_quantize
+                )
+                transformer.load_weights(quantized_path, strict=True)
+                print(
+                    f"  Loaded cached {actual_quantize}-bit DiT: "
+                    f"{quantized_layers} quantized layers"
+                )
+            else:
+                weights = mx.load(dit_weights_path)
+                transformer.load_weights(list(weights.items()), strict=False)
+                print(f"  Loaded DiT: {len(weights)} tensors (BF16)")
+                del weights
+                print(f"  Quantizing DiT to {actual_quantize}-bit...")
+                quantized_layers = _quantize_transformer(
+                    transformer, actual_quantize
+                )
+                _save_quantized_cache(
+                    transformer,
+                    quantized_path,
+                    quantized_metadata_path,
+                    expected_metadata,
+                )
+                print(
+                    f"  Cached {actual_quantize}-bit DiT at {quantized_path} "
+                    f"({quantized_layers} quantized layers)"
+                )
+        else:
             weights = mx.load(dit_weights_path)
             transformer.load_weights(list(weights.items()), strict=False)
             print(f"  Loaded DiT: {len(weights)} tensors (BF16)")
-
-        # Apply quantization at runtime using MLX's native nn.quantize
-        # This automatically replaces nn.Linear layers with nn.QuantizedLinear
-        if actual_quantize in (4, 8):
-            print(f"  Quantizing DiT to {actual_quantize}-bit...")
-            # Use nn.quantize with class_predicate to properly replace nn.Linear
-            # with nn.QuantizedLinear in-place. This ensures QuantizedLinear.__call__
-            # handles unpacking during inference instead of nn.Linear.__call__.
-            nn.quantize(
-                transformer,
-                bits=actual_quantize,
-                group_size=32,
-                class_predicate=should_quantize_dit_layer,
-            )
-            quantized_layers = sum(
-                isinstance(module, nn.QuantizedLinear)
-                for _, module in transformer.named_modules()
-            )
-            print(
-                f"  DiT quantized ({actual_quantize}-bit, "
-                f"{quantized_layers} attention/MLP layers)"
-            )
 
         # Load VAE
         vae_weights_path = os.path.join(model_dir, "vae.safetensors")

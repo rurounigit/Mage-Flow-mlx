@@ -16,7 +16,8 @@ This port translates the PyTorch/CUDA implementation to native MLX, running enti
 
 - **Mac**: M1/M2/M3/M4/M5 series (Apple Silicon)
 - **RAM**: 24 GB recommended
-- **Disk**: about 17 GB for converted BF16 weights, plus the Hugging Face cache
+- **Disk**: about 17 GB for converted BF16 weights, plus the Hugging Face cache;
+  optional persistent DiT caches add about 4.2 GB (4-bit) and 5.5 GB (8-bit)
 - **Python**: 3.11+
 
 ## Quick Start
@@ -33,8 +34,9 @@ uv pip install mlx mlx-lm safetensors torch huggingface_hub pillow numpy regex
 python generate.py --prompt "A futuristic cityscape at sunset, photorealistic"
 ```
 
-The converted model preserves the original BF16 precision. Optional runtime
-quantization keeps sensitive conditioning and final-block layers in BF16.
+The converted model preserves the original BF16 precision. Optional quantized
+variants keep sensitive conditioning and final-block layers in BF16 and are
+cached separately without modifying the canonical checkpoint.
 
 ### Automatic Model Download & Conversion
 
@@ -44,6 +46,21 @@ You no longer need to run `convert_weights.py` manually. When you run `generate.
 2. If missing, automatically download the raw PyTorch weights from HuggingFace (`microsoft/Mage-Flow-Turbo`)
 3. Convert them to native MLX BF16 format on-the-fly
 4. Cache the converted weights for instant startup on subsequent runs
+
+When `--quantize 4` or `--quantize 8` is requested for the first time, the
+pipeline derives and atomically saves a persistent packed DiT variant:
+
+```text
+models/mage_flow_mlx/transformer_quant4.safetensors
+models/mage_flow_mlx/transformer_quant4.json
+models/mage_flow_mlx/transformer_quant8.safetensors
+models/mage_flow_mlx/transformer_quant8.json
+```
+
+Later runs construct the matching `nn.QuantizedLinear` module layout and load
+the packed cache directly, skipping BF16 DiT loading and repeated quantization.
+Metadata records the bit depth, group size, policy version, excluded sensitive
+layers, and BF16 source signature. A stale or incompatible cache is rebuilt.
 
 You can also explicitly pass a HuggingFace repo ID:
 
@@ -78,7 +95,7 @@ python generate.py [OPTIONS]
 | `--guidance FLOAT` | `1.0` | Classifier-free guidance (CFG) scale. `1.0` disables CFG and performs one DiT pass per step. Values above 1 strengthen prompt adherence but very high values can oversaturate or reduce natural detail. |
 | `--negative-prompt TEXT` | one space (`" "`) | Text for the unconditional/negative CFG branch. It is only used when `--guidance` is greater than 1. |
 | `--output PATH` | `output.png` | Destination image path. The format is inferred from the extension by Pillow. |
-| `--quantize INT` | none | Quantize supported DiT attention/MLP layers to 4 or 8 bits in memory. The cached checkpoint remains BF16. Boundary, modulation, and the numerically sensitive final image MLP expansion stay BF16. |
+| `--quantize INT` | none | Use a persistent 4- or 8-bit DiT cache. The variant is created atomically on first use and reused afterward. The canonical checkpoint stays BF16; boundary, modulation, and the sensitive final image MLP expansion remain BF16 inside each mixed-precision variant. |
 
 
 ### Examples
@@ -114,7 +131,7 @@ python generate.py \
 - **Conv2d weights**: `[Out, In, H, W]` → `[Out, H, W, In]` (NHWC layout)
 - **2D RoPE**: Complex-number rotary embeddings with 3 axes (frame=16, height=56, width=56)
 - **Joint attention**: Text+image tokens packed, single SDPA forward
-- **Precision**: The cached weights remain BF16. Optional quantization is applied in memory after loading and never overwrites the BF16 cache.
+- **Precision**: Canonical weights remain BF16. Quantized variants are stored under distinct filenames and never overwrite the BF16 cache.
 
 ## Memory Budget (24 GB MacBook Air M5)
 
