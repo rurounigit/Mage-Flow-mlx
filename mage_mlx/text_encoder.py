@@ -787,10 +787,17 @@ class MageFlowTextEncoder(nn.Module):
         # normalization, strict=False would silently leave the entire Qwen
         # language model randomly initialized.
         normalized_weights = {}
+        has_visual_weights = False
         for key, value in weights.items():
             if key.startswith("language_model.model."):
                 key = "language_model." + key[len("language_model.model."):]
+            if key.startswith("visual.") or key.startswith("vision_tower."):
+                has_visual_weights = True
+                if key.startswith("vision_tower."):
+                    key = "visual." + key[len("vision_tower."):]
             normalized_weights[key] = value
+        if has_visual_weights:
+            self._ensure_visual()
         self.load_weights(list(normalized_weights.items()), strict=False)
         print(f"  Loaded text encoder: {len(normalized_weights)} tensors")
 

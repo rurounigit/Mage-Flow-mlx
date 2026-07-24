@@ -245,3 +245,16 @@ mage-flow-mlx/
 ## License
 
 This project is a port of Microsoft's Mage-Flow. See the original [Mage repository](https://github.com/microsoft/Mage) for the original implementation and license.
+
+### Editing
+
+Providing `--image` automatically selects the dedicated `microsoft/Mage-Flow-Edit-Turbo`
+checkpoint. On first use, the loader downloads and converts it to a cached MLX directory;
+subsequent runs reuse that cache. `--model` is only needed to select a different dedicated
+Edit checkpoint explicitly.
+
+```bash
+python generate.py --prompt "change the shoe to burgundy leather" \
+  --image test_10_shoe.png --output test_10_shoe_edited.png \
+  --allow-high-memory-edit
+```

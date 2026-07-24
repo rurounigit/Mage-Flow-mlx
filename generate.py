@@ -30,7 +30,7 @@ def main():
         help="Text prompt for image generation"
     )
     parser.add_argument(
-        "--model", type=str, default="models/mage_flow_mlx",
+        "--model", type=str, default=None,
         help="Path to the BF16 MLX model directory or HuggingFace repo ID (e.g. microsoft/Mage-Flow-Turbo)"
     )
     parser.add_argument(
@@ -94,6 +94,13 @@ def main():
         help="Allow edit runs whose target/reference attention may exceed 25 GB unified memory"
     )
     args = parser.parse_args()
+    model_was_explicit = args.model is not None
+    if args.model is None:
+        args.model = (
+            "microsoft/Mage-Flow-Edit-Turbo"
+            if args.image is not None
+            else "models/mage_flow_mlx"
+        )
 
     # Validate: need either --prompt or --worker
     if args.worker is None and args.prompt is None:
@@ -109,6 +116,15 @@ def main():
     if args.guidance < 1.0:
         print(f"Error: guidance must be at least 1.0, got {args.guidance}")
         sys.exit(1)
+
+    # Edit requires the dedicated Mage-Flow-Edit checkpoint; txt2img Turbo
+    # weights are not trained for multimodal editing.
+    if args.image is not None and model_was_explicit and "edit" not in args.model.lower():
+        parser.error(
+            "the explicitly selected model is not a Mage-Flow-Edit checkpoint: "
+            f"{args.model}. Omit --model to use Mage-Flow-Edit-Turbo automatically, "
+            "or select a dedicated Edit checkpoint."
+        )
 
     # Reject high-memory edit requests before importing or loading model weights.
     if args.image is not None:

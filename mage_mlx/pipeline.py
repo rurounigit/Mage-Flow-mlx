@@ -294,7 +294,7 @@ class MageFlowPipeline:
         if profiler:
             profiler.start("vae_load")
         vae_weights_path = os.path.join(model_dir, "vae.safetensors")
-        vae = MageVAE(vae_weights_path, sample_posterior=False)
+        vae = MageVAE(vae_weights_path, sample_posterior=True)
         if profiler:
             profiler.stop("vae_load")
         print(f"  Loaded VAE")

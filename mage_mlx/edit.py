@@ -45,6 +45,7 @@ from .dit import MageFlow
 from .scheduler import FlowMatchEulerDiscreteScheduler
 from .text_encoder import MageFlowTextEncoder
 from .vae import MageVAE
+from .latent_creator import MageFlowLatentCreator
 
 
 def reference_cache_key(image_bytes: bytes, size: tuple[int, int]) -> str:
@@ -84,6 +85,7 @@ class MageFlowEditUtil:
         ref_images: list[Image.Image],
         target_height: int,
         target_width: int,
+        seed: int = 42,
     ) -> tuple[mx.array, list[tuple[int, int, int]]]:
         """Encode reference images to packed latents.
 
@@ -109,10 +111,13 @@ class MageFlowEditUtil:
             )
             # Normalize to [-1, 1]
             ref_array = np.array(ref_resized, dtype=np.float32) / 127.5 - 1.0
-            ref_mx = mx.array(ref_array)[None, ...]  # [1, H, W, 3]
+            ref_mx = mx.array(ref_array, dtype=self.vae.dconv_encoder.patch_cond_embed.weight.dtype)[None, ...]  # [1, H, W, 3]
 
             # Encode via VAE
-            ref_latents = self.vae.encode(ref_mx)  # [1, lat_h, lat_w, 128]
+            ref_latents = self.vae.encode(
+                ref_mx,
+                key=mx.random.key(seed),
+            )  # [1, lat_h, lat_w, 128]
             packed = self.vae.pack_latents(ref_latents)  # [1, lat_h*lat_w, 128]
             packed_refs.append(packed)
             ref_img_shapes.append((1, lat_h, lat_w))
@@ -178,6 +183,7 @@ class MageFlowEdit:
         txt_embeds: mx.array,
         neg_txt_embeds: mx.array | None,
         img_shapes: list[tuple[int, int, int]],
+        text_attention_mask: mx.array | None,
         timesteps: mx.array,
         guidance_scale: float,
         renormalization: bool = False,
@@ -206,6 +212,7 @@ class MageFlowEdit:
             txt=txt_embeds,
             timesteps=timesteps,
             img_shapes=img_shapes,
+            text_attention_mask=text_attention_mask,
         )
 
         # Run unconditional pass for CFG
@@ -215,6 +222,7 @@ class MageFlowEdit:
                 txt=neg_txt_embeds,
                 timesteps=timesteps,
                 img_shapes=img_shapes,
+                text_attention_mask=text_attention_mask,
             )
             v_pred_seq = v_uncond_seq + guidance_scale * (v_pred_seq - v_uncond_seq)
 
@@ -286,7 +294,7 @@ class MageFlowEdit:
         if profiler:
             profiler.start("ref_encode")
         ref_latents, ref_img_shapes = self.edit_util.encode_references(
-            ref_images, height, width
+            ref_images, height, width, seed=seed
         )
         mx.eval(ref_latents)
         print(f"  Reference latents: {ref_latents.shape}")
@@ -308,18 +316,30 @@ class MageFlowEdit:
 
         neg_txt_embeds = None
         if guidance_scale > 1.0:
-            neg_txt_embeds, _ = self.text_encoder.encode_text_to_image(
+            # CFG branches for edit must have identical multimodal structure.
+            # mflux encodes the negative instruction with the same reference
+            # images; a text-only negative branch removes the vision tokens and
+            # produces an invalid unconditional edit condition.
+            neg_txt_embeds, _ = self.text_encoder.encode_edit(
                 prompts=[negative_prompt],
+                images_per_prompt=[ref_images],
                 tokenizer=tokenizer,
                 max_sequence_length=2048,
             )
             mx.eval(neg_txt_embeds)
-            print(f"  Negative text embeddings: {neg_txt_embeds.shape}")
+            print(f"  Negative edit embeddings: {neg_txt_embeds.shape}")
         if profiler:
             profiler.stop("text_encode")
 
-        # 3. Initialize Gaussian noise in latent space
-        latents = mx.random.normal((1, lat_h, lat_w, 128)).astype(mx.bfloat16)
+        # 3. Initialize the canonical MageFlow Gaussian-Shading noise in
+        # NCHW, then convert to the pipeline's NHWC latent layout.
+        packed_noise = MageFlowLatentCreator.create_noise(
+            seed=seed,
+            height=height,
+            width=width,
+            dtype=mx.bfloat16,
+        )
+        latents = self.vae.unpack_latents(packed_noise, lat_h, lat_w)
 
         # 4. Flow matching sampling loop
         for i in range(self.num_steps):
@@ -348,6 +368,7 @@ class MageFlowEdit:
                 txt_embeds=txt_embeds,
                 neg_txt_embeds=neg_txt_embeds,
                 img_shapes=img_shapes,
+                text_attention_mask=txt_mask,
                 timesteps=t_batch,
                 guidance_scale=guidance_scale,
                 renormalization=renormalization,

@@ -79,8 +79,6 @@ def map_dit_key(key: str) -> str | None:
 
 def map_text_encoder_key(key: str) -> str | None:
     """Map Hugging Face Qwen3-VL text keys to mlx-lm's module tree."""
-    if "vision_tower" in key or "visual" in key:
-        return None
     if key.startswith("model.language_model."):
         return "language_model.model." + key[len("model.language_model."):]
     if key.startswith("language_model."):

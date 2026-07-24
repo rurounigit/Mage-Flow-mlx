@@ -577,7 +577,7 @@ class MageVAE(nn.Module):
         # For simplicity, we skip this optimization in the initial port.
         pass
 
-    def encode(self, x: mx.array) -> mx.array:
+    def encode(self, x: mx.array, key: mx.array | None = None) -> mx.array:
         """Encode image to latent.
 
         Args:
@@ -599,7 +599,7 @@ class MageVAE(nn.Module):
         logvar = mx.clip(out[..., self.latent_channels:], -20.0, 10.0)
 
         if self.sample_posterior:
-            return mean + mx.exp(0.5 * logvar) * mx.random.normal(mean.shape)
+            return mean + mx.exp(0.5 * logvar) * mx.random.normal(mean.shape, key=key)
         return mean
 
     def decode(self, z: mx.array) -> mx.array:

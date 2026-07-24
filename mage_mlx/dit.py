@@ -128,6 +128,7 @@ class Attention(nn.Module):
         hidden_states: mx.array,
         encoder_hidden_states: mx.array,
         image_rotary_emb: mx.array | None = None,
+        attention_mask: mx.array | None = None,
     ) -> tuple[mx.array, mx.array]:
         """Joint attention forward.
 
@@ -179,7 +180,7 @@ class Attention(nn.Module):
 
         # Scaled dot-product attention
         attn = mx.fast.scaled_dot_product_attention(
-            joint_q, joint_k, joint_v, scale=self.scale
+            joint_q, joint_k, joint_v, scale=self.scale, mask=attention_mask
         )
 
         # Split back to text and image
@@ -278,6 +279,7 @@ class MageFlowTransformerBlock(nn.Module):
         encoder_hidden_states: mx.array,
         temb: mx.array,
         image_rotary_emb: mx.array | None = None,
+        attention_mask: mx.array | None = None,
     ) -> tuple[mx.array, mx.array]:
         """Forward pass.
 
@@ -310,6 +312,7 @@ class MageFlowTransformerBlock(nn.Module):
             hidden_states=img_modulated,
             encoder_hidden_states=txt_modulated,
             image_rotary_emb=image_rotary_emb,
+            attention_mask=attention_mask,
         )
 
         # Residual + gate
@@ -404,7 +407,8 @@ class MageFlow(nn.Module):
         img: mx.array,
         txt: mx.array,
         timesteps: mx.array,
-        img_shapes: tuple[int, int, int] | None = None,
+        img_shapes: tuple[int, int, int] | list[tuple[int, int, int]] | None = None,
+        text_attention_mask: mx.array | None = None,
     ) -> mx.array:
         """Forward pass.
 
@@ -421,6 +425,7 @@ class MageFlow(nn.Module):
             raise ValueError("Input img and txt tensors must have 3 dimensions.")
 
         B, N_img, _ = img.shape
+        N_txt = txt.shape[1]
 
         # Compute 2D RoPE frequencies
         if img_shapes is None:
@@ -439,6 +444,21 @@ class MageFlow(nn.Module):
 
         # Text projection
         txt = self.txt_in(txt)
+
+        # Build the mflux-compatible key mask: text mask followed by valid
+        # image keys. Padded multimodal text tokens must not affect attention.
+        attention_mask = None
+        if text_attention_mask is not None:
+            if text_attention_mask.shape != (B, N_txt):
+                raise ValueError("text_attention_mask must match text conditioning shape")
+            key_valid = mx.concatenate(
+                [text_attention_mask.astype(mx.bool_), mx.ones((B, N_img), dtype=mx.bool_)], axis=-1
+            )
+            attention_mask = mx.where(
+                key_valid[:, None, None, :],
+                mx.array(0.0, dtype=img.dtype),
+                mx.array(-1e9, dtype=img.dtype),
+            )
 
         # Transformer blocks
         for block in self.transformer_blocks:
