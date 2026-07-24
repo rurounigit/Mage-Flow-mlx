@@ -89,10 +89,6 @@ def main():
         "--renormalization", action="store_true",
         help="Renormalize velocity predictions during editing"
     )
-    parser.add_argument(
-        "--allow-high-memory-edit", action="store_true",
-        help="Allow edit runs whose target/reference attention may exceed 25 GB unified memory"
-    )
     args = parser.parse_args()
     model_was_explicit = args.model is not None
     if args.model is None:
@@ -125,19 +121,6 @@ def main():
             f"{args.model}. Omit --model to use Mage-Flow-Edit-Turbo automatically, "
             "or select a dedicated Edit checkpoint."
         )
-
-    # Reject high-memory edit requests before importing or loading model weights.
-    if args.image is not None:
-        reference_count = 1 if args.ref_images is None else max(
-            1, len([p for p in args.ref_images.split(",") if p.strip()])
-        )
-        tokens_per_image = (args.height // 16) * (args.width // 16)
-        total_tokens = (reference_count + 1) * tokens_per_image
-        if total_tokens > 4096 and not args.allow_high_memory_edit:
-            parser.error(
-                f"edit would use {total_tokens} image tokens and may exceed 25 GB unified memory; "
-                "use a smaller resolution or pass --allow-high-memory-edit explicitly"
-            )
 
     # --- Phase: Python/import startup ---
     from mage_mlx.profiler import Profiler
