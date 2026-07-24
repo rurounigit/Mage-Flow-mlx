@@ -47,7 +47,7 @@ class Profiler:
     enabled: bool = True
     track_memory: bool = True
     _records: list[PhaseRecord] = field(default_factory=list)
-    _timers: dict[str, float] = field(default_factory=dict)
+    _timers: dict[str, list[float]] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
     # Memory helpers
@@ -56,14 +56,17 @@ class Profiler:
     def _get_rss_gib() -> Optional[float]:
         """Return current process RSS in GiB, or None if unavailable."""
         try:
+            import platform
             import resource
 
-            # ru_maxrss is in bytes on macOS, kilobytes on Linux
+            # ru_maxrss is in bytes on macOS, kilobytes on Linux.
+            # Detect by platform rather than magnitude, since a 5 GB process
+            # on macOS (~5e9 bytes) would be misread as ~4768 GiB if treated
+            # as KB.
             rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
             if rss > 0:
-                # macOS reports bytes; Linux reports KB. Detect by magnitude.
-                if rss > 10_000_000_000:  # >10 GB → already in bytes
-                    return rss / (1024 ** 3)
+                if platform.system() == "Darwin":
+                    return rss / (1024 ** 3)  # bytes → GiB
                 else:
                     return rss / (1024 ** 2)  # KB → GiB
         except Exception:
@@ -74,21 +77,32 @@ class Profiler:
     # Timing API
     # ------------------------------------------------------------------
     def start(self, name: str) -> None:
-        """Start timing a named phase."""
+        """Start timing a named phase.
+
+        Supports nested phases with the same name via a stack.
+        """
         if not self.enabled:
             return
-        self._timers[name] = time.perf_counter()
+        if name not in self._timers:
+            self._timers[name] = []
+        self._timers[name].append(time.perf_counter())
 
     def stop(self, name: str) -> float:
         """Stop timing a named phase and record the elapsed time.
 
-        Returns the elapsed seconds (0.0 if disabled).
+        Pops the most recent start for the given name (LIFO), so nested
+        phases with the same name are handled correctly.
+
+        Returns the elapsed seconds (0.0 if disabled or no matching start).
         """
         if not self.enabled:
             return 0.0
-        start = self._timers.pop(name, None)
-        if start is None:
+        timers = self._timers.get(name)
+        if not timers:
             return 0.0
+        start = timers.pop()
+        if not timers:
+            del self._timers[name]
         elapsed = time.perf_counter() - start
         rss = self._get_rss_gib() if self.track_memory else None
         self._records.append(PhaseRecord(name=name, elapsed=elapsed, peak_rss_gib=rss))
