@@ -23,9 +23,24 @@ from PIL import Image
 
 from .dit import MageFlow, MageFlowParams
 from .loader import _read_safetensors_header, ensure_mlx_model
+from .processor import MageFlowQwen3VLProcessor
 from .scheduler import FlowMatchEulerDiscreteScheduler
-from .text_encoder import Qwen3VLTextEncoder
+from .text_encoder import MageFlowTextEncoder
 from .vae import MageVAE
+
+
+class MageFlowTokenizer:
+    """Tokenizer wrapper exposing ``tokenizer`` and ``processor`` attributes.
+
+    The ``tokenizer`` attribute is the raw HuggingFace tokenizer used for
+    text-only encoding (txt2img). The ``processor`` attribute is the
+    :class:`MageFlowQwen3VLProcessor` used for multi-modal encoding (edit).
+    """
+
+    def __init__(self, tokenizer, processor: MageFlowQwen3VLProcessor | None = None):
+        self.tokenizer = tokenizer
+        self.processor = processor if processor is not None else MageFlowQwen3VLProcessor(tokenizer)
+
 
 
 QUANTIZATION_POLICY_VERSION = 1
@@ -157,18 +172,21 @@ class MageFlowPipeline:
         self,
         transformer: MageFlow,
         vae: MageVAE,
-        text_encoder: Qwen3VLTextEncoder,
+        text_encoder: MageFlowTextEncoder,
+        tokenizer: "MageFlowTokenizer | None" = None,
         num_steps: int = 4,
     ):
         self.transformer = transformer
         self.vae = vae
         self.text_encoder = text_encoder
+        self.tokenizer = tokenizer
         self.scheduler = FlowMatchEulerDiscreteScheduler(
             num_train_timesteps=1000,
             shift=6.0,
             num_inference_steps=num_steps,
         )
         self.num_steps = num_steps
+
 
     @classmethod
     def from_pretrained(
@@ -285,14 +303,19 @@ class MageFlowPipeline:
         if profiler:
             profiler.start("text_encoder_load")
         te_weights_path = os.path.join(model_dir, "text_encoder.safetensors")
-        text_encoder = Qwen3VLTextEncoder(
+        text_encoder = MageFlowTextEncoder(
             model_path=te_weights_path if os.path.exists(te_weights_path) else None,
         )
         if profiler:
             profiler.stop("text_encoder_load")
         print(f"  Loaded text encoder")
 
-        return cls(transformer, vae, text_encoder, num_steps=num_steps)
+        # Load tokenizer for text encoding
+        from transformers import AutoTokenizer
+        raw_tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-VL-8B-Instruct")
+        tokenizer = MageFlowTokenizer(raw_tokenizer)
+
+        return cls(transformer, vae, text_encoder, tokenizer=tokenizer, num_steps=num_steps)
 
     def generate(
         self,
@@ -341,13 +364,21 @@ class MageFlowPipeline:
         if profiler:
             profiler.start("text_encode")
         print(f"  Encoding text: '{prompt[:80]}...'")
-        txt_embeds = self.text_encoder(prompt)
+        txt_embeds, _ = self.text_encoder.encode_text_to_image(
+            prompts=[prompt],
+            tokenizer=self.tokenizer,
+            max_sequence_length=2048,
+        )
         mx.eval(txt_embeds)
         print(f"  Text embeddings: {txt_embeds.shape}")
 
         neg_txt_embeds = None
         if guidance_scale > 1.0:
-            neg_txt_embeds = self.text_encoder(negative_prompt)
+            neg_txt_embeds, _ = self.text_encoder.encode_text_to_image(
+                prompts=[negative_prompt],
+                tokenizer=self.tokenizer,
+                max_sequence_length=2048,
+            )
             mx.eval(neg_txt_embeds)
             print(f"  Negative text embeddings: {neg_txt_embeds.shape}")
         if profiler:

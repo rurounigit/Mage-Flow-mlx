@@ -217,8 +217,6 @@ class MageFlowEmbedRope(nn.Module):
         Returns:
             (cos, sin) tuple of [seq_len, dim//2] tensors
         """
-        if isinstance(video_fhw, list):
-            video_fhw = video_fhw[0]
         if not isinstance(video_fhw, list):
             video_fhw = [video_fhw]
 

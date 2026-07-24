@@ -123,14 +123,22 @@ def map_dit_key(key: str) -> str | None:
 
 
 def map_text_encoder_key(key: str) -> str | None:
-    """Map Hugging Face Qwen3-VL text keys to mlx-lm's module tree."""
-    if "vision_tower" in key or "visual" in key:
-        return None
+    """Map Hugging Face Qwen3-VL text keys to native MLX Qwen3-VL module tree.
+
+    Keeps vision tower weights (mapped to ``visual.*``) so the text encoder
+    can perform multi-modal encoding for image editing.
+    """
+    # Keep vision tower weights for the native MLX Qwen3-VL text encoder
+    if key.startswith("model.vision_tower."):
+        return "visual." + key[len("model.vision_tower."):]
+    if key.startswith("vision_tower."):
+        return "visual." + key[len("vision_tower."):]
     if key.startswith("model.language_model."):
-        return "language_model.model." + key[len("model.language_model."):]
+        return "language_model." + key[len("model.language_model."):]
     if key.startswith("language_model."):
         return key
     return "language_model." + key
+
 
 
 def map_vae_key(key: str) -> str | None:
@@ -273,8 +281,6 @@ def ensure_mlx_model(
                     shard_path = os.path.join(te_dir, shard)
                     with safe_open(shard_path, framework="pt") as f:
                         for key in list(f.keys()):
-                            if "vision_tower" in key:
-                                continue
                             t = f.get_tensor(key)
                             mapped_key = map_text_encoder_key(key)
                             if mapped_key is None:
@@ -285,6 +291,7 @@ def ensure_mlx_model(
                             mlx_te[mapped_key] = mx_arr
                             del t, mx_arr
                             gc.collect()
+
 
         if mlx_te:
             mx.save_safetensors(te_out_path, mlx_te)

@@ -77,6 +77,22 @@ def main():
         "--benchmark-cleanup", action="store_true",
         help="Benchmark all 4 Qwen cleanup strategies (unload, gc, clear_cache, all)"
     )
+    parser.add_argument(
+        "--image", type=str, default=None,
+        help="Target image path for editing (use with --ref-images)"
+    )
+    parser.add_argument(
+        "--ref-images", type=str, default=None,
+        help="Comma-separated reference image paths for editing"
+    )
+    parser.add_argument(
+        "--renormalization", action="store_true",
+        help="Renormalize velocity predictions during editing"
+    )
+    parser.add_argument(
+        "--allow-high-memory-edit", action="store_true",
+        help="Allow edit runs whose target/reference attention may exceed 25 GB unified memory"
+    )
     args = parser.parse_args()
 
     # Validate: need either --prompt or --worker
@@ -93,6 +109,19 @@ def main():
     if args.guidance < 1.0:
         print(f"Error: guidance must be at least 1.0, got {args.guidance}")
         sys.exit(1)
+
+    # Reject high-memory edit requests before importing or loading model weights.
+    if args.image is not None:
+        reference_count = 1 if args.ref_images is None else max(
+            1, len([p for p in args.ref_images.split(",") if p.strip()])
+        )
+        tokens_per_image = (args.height // 16) * (args.width // 16)
+        total_tokens = (reference_count + 1) * tokens_per_image
+        if total_tokens > 4096 and not args.allow_high_memory_edit:
+            parser.error(
+                f"edit would use {total_tokens} image tokens and may exceed 25 GB unified memory; "
+                "use a smaller resolution or pass --allow-high-memory-edit explicitly"
+            )
 
     # --- Phase: Python/import startup ---
     from mage_mlx.profiler import Profiler
@@ -145,6 +174,14 @@ def main():
             prof.print_report()
         return
 
+    # --- Edit mode ---
+    if args.image is not None:
+        _run_edit(args, prof)
+        prof.stop("total_wall_clock")
+        if args.profile:
+            prof.print_report()
+        return
+
     # --- Phase: Pipeline load (DiT + VAE + text encoder) ---
     prof.start("pipeline_load")
     try:
@@ -191,6 +228,76 @@ def main():
     # --- Report ---
     if args.profile:
         prof.print_report()
+
+
+def _run_edit(args, prof):
+    """Run the image editing pipeline."""
+    from PIL import Image
+    from mage_mlx import MageFlowEdit, MageFlowPipeline
+
+    if args.ref_images is None:
+        # Use the target image as its own reference (mflux --image-paths semantics)
+        ref_paths = [args.image]
+        print("  No --ref-images provided; using target image as reference")
+    else:
+        ref_paths = [p.strip() for p in args.ref_images.split(",") if p.strip()]
+        if not ref_paths:
+            print("Error: at least one reference image is required")
+            sys.exit(1)
+
+    print(f"Loading Mage-Flow MLX edit pipeline from {args.model}...")
+    try:
+        pipeline = MageFlowPipeline.from_pretrained(
+            model_dir=args.model,
+            num_steps=args.steps,
+            quantize=args.quantize,
+            profiler=prof,
+        )
+        print("  Pipeline loaded successfully!")
+    except Exception as e:
+        print(f"  ERROR loading pipeline: {e}")
+        traceback.print_exc()
+        sys.exit(1)
+
+    edit = MageFlowEdit(
+        transformer=pipeline.transformer,
+        vae=pipeline.vae,
+        text_encoder=pipeline.text_encoder,
+        num_steps=args.steps,
+    )
+
+    # Load images
+    target_image = Image.open(args.image).convert("RGB")
+    ref_images = [Image.open(p).convert("RGB") for p in ref_paths]
+
+    print(f"\nEditing {args.height}x{args.width} image...")
+    print(f"  Target: {args.image}")
+    print(f"  References: {ref_paths}")
+    print(f"  Prompt: {args.prompt}")
+    print(f"  Steps: {args.steps}, Seed: {args.seed}")
+
+    prof.start("edit")
+    image = edit.edit(
+        target_image=target_image,
+        ref_images=ref_images,
+        prompt=args.prompt,
+        seed=args.seed,
+        height=args.height,
+        width=args.width,
+        guidance_scale=args.guidance,
+        negative_prompt=args.negative_prompt,
+        renormalization=args.renormalization,
+        profiler=prof,
+        tokenizer=pipeline.tokenizer,
+    )
+    prof.stop("edit")
+
+    # Save
+    prof.start("save_png")
+    image.save(args.output)
+    prof.stop("save_png")
+    print(f"\nEdited image saved to {args.output}")
+    print(f"   Size: {image.size}")
 
 
 def _benchmark_cleanup(args, prof):

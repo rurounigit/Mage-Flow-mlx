@@ -213,7 +213,11 @@ def run_worker(
             if params.get("guidance", 1.0) > 1.0:
                 if profiler:
                     profiler.start(f"text_encode_neg_{i + 1}")
-                neg_embeds = pipeline.text_encoder(params.get("negative_prompt", " "))
+                neg_embeds, _ = pipeline.text_encoder.encode_text_to_image(
+                    prompts=[params.get("negative_prompt", " ")],
+                    tokenizer=pipeline.tokenizer,
+                    max_sequence_length=2048,
+                )
                 mx.eval(neg_embeds)
                 if profiler:
                     profiler.stop(f"text_encode_neg_{i + 1}")
@@ -224,7 +228,11 @@ def run_worker(
                 profiler.start(f"text_encode_{i + 1}")
 
             # Encode positive prompt (Qwen stays loaded)
-            pos_embeds = pipeline.text_encoder(params["prompt"])
+            pos_embeds, _ = pipeline.text_encoder.encode_text_to_image(
+                prompts=[params["prompt"]],
+                tokenizer=pipeline.tokenizer,
+                max_sequence_length=2048,
+            )
             mx.eval(pos_embeds)
             print(f"  Text embeddings: {pos_embeds.shape}")
 
@@ -234,7 +242,11 @@ def run_worker(
             # Encode negative prompt if guidance > 1.0
             neg_embeds = None
             if params.get("guidance", 1.0) > 1.0:
-                neg_embeds = pipeline.text_encoder(params.get("negative_prompt", " "))
+                neg_embeds, _ = pipeline.text_encoder.encode_text_to_image(
+                    prompts=[params.get("negative_prompt", " ")],
+                    tokenizer=pipeline.tokenizer,
+                    max_sequence_length=2048,
+                )
                 mx.eval(neg_embeds)
                 print(f"  Negative text embeddings: {neg_embeds.shape}")
 

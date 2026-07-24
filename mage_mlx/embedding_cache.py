@@ -32,7 +32,7 @@ import mlx.core as mx
 
 
 # Cache format version — bump when the embedding format or template changes
-EMBEDDING_CACHE_VERSION = 1
+EMBEDDING_CACHE_VERSION = 2
 
 # Tokenizer/template version — bump when MAGE_FLOW_TEMPLATE or START_IDX changes
 TOKENIZER_VERSION = 1
@@ -74,11 +74,11 @@ class EmbeddingCache:
         Returns:
             SHA-256 hex digest string
         """
-        from mage_mlx.text_encoder import MAGE_FLOW_TEMPLATE
+        from mage_mlx.prompt_processor import MageFlowPromptProcessor
 
         # Apply the same template the text encoder uses
-        formatted = MAGE_FLOW_TEMPLATE.format(prompt)
-        formatted_neg = MAGE_FLOW_TEMPLATE.format(negative_prompt)
+        formatted = MageFlowPromptProcessor.format_text_to_image(prompt)
+        formatted_neg = MageFlowPromptProcessor.format_text_to_image(negative_prompt)
 
         # Text-encoder checkpoint signature
         te_signature = "none"

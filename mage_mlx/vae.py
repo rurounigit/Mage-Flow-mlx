@@ -618,3 +618,29 @@ class MageVAE(nn.Module):
         noise = mx.zeros((B, H, W, 3), dtype=z.dtype)
         t = mx.zeros((B,), dtype=z.dtype)
         return self.decoder_model(noise, t, cond)
+
+    def pack_latents(self, latents: mx.array) -> mx.array:
+        """Flatten spatial dimensions of NHWC latents.
+
+        Args:
+            latents: [B, H, W, C] latent
+
+        Returns:
+            [B, H*W, C] flattened latent
+        """
+        batch_size, height, width, channels = latents.shape
+        return latents.reshape(batch_size, height * width, channels)
+
+    def unpack_latents(self, latents: mx.array, height: int, width: int) -> mx.array:
+        """Unflatten spatial dimensions of packed latents.
+
+        Args:
+            latents: [B, H*W, C] flattened latent
+            height: Target height in patches
+            width: Target width in patches
+
+        Returns:
+            [B, H, W, C] latent
+        """
+        batch_size, num_patches, channels = latents.shape
+        return latents.reshape(batch_size, height, width, channels)
