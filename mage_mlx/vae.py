@@ -84,7 +84,10 @@ class Normalize(nn.Module):
         )
 
     def __call__(self, x: mx.array) -> mx.array:
-        return self.norm(x)
+        # mflux performs VAE GroupNorm statistics in FP32 even when the
+        # surrounding encoder runs in BF16, then restores the activation dtype.
+        dtype = x.dtype
+        return self.norm(x.astype(mx.float32)).astype(dtype)
 
 
 def modulate(x: mx.array, shift: mx.array, scale: mx.array) -> mx.array:
@@ -599,7 +602,17 @@ class MageVAE(nn.Module):
         logvar = mx.clip(out[..., self.latent_channels:], -20.0, 10.0)
 
         if self.sample_posterior:
-            return mean + mx.exp(0.5 * logvar) * mx.random.normal(mean.shape, key=key)
+            if key is None:
+                raise ValueError("key is required when sample_posterior is enabled")
+            # Match mflux: keyed posterior noise is generated in NCHW order,
+            # then transposed to this port's NHWC latent representation.
+            noise_nchw = mx.random.normal(
+                (mean.shape[0], mean.shape[-1], mean.shape[1], mean.shape[2]),
+                dtype=mean.dtype,
+                key=key,
+            )
+            noise = noise_nchw.transpose(0, 2, 3, 1)
+            return mean + mx.exp(0.5 * logvar) * noise
         return mean
 
     def decode(self, z: mx.array) -> mx.array:

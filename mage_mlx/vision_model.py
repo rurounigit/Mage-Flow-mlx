@@ -93,8 +93,8 @@ class Qwen3VLVisionRotaryEmbedding(nn.Module):
         super().__init__()
         self.dim = dim
         self.theta = theta
-        inv_freq = 1.0 / (theta ** (np.arange(0, dim, 2, dtype=np.float32) / dim))
-        self.inv_freq = mx.array(inv_freq)
+        inv_freq = 1.0 / (theta ** (mx.arange(0, dim, 2, dtype=mx.float32) / dim))
+        self.inv_freq = inv_freq
 
     def __call__(self, seqlen: int) -> mx.array:
         seq = mx.arange(seqlen, dtype=mx.float32)
@@ -141,11 +141,12 @@ class Qwen3VLVisionAttention(nn.Module):
             self.num_heads,
             self.head_dim,
         )
-        qkv = qkv.transpose(1, 0, 2, 3)
-        query_states, key_states, value_states = mx.split(qkv, 3, axis=0)
-        query_states = query_states.squeeze(0)
-        key_states = key_states.squeeze(0)
-        value_states = value_states.squeeze(0)
+        # Match mflux: split the fused projection while its QKV axis is axis 1,
+        # then remove that singleton axis before transposing for attention.
+        query_states, key_states, value_states = mx.split(qkv, 3, axis=1)
+        query_states = query_states.squeeze(1)
+        key_states = key_states.squeeze(1)
+        value_states = value_states.squeeze(1)
 
         # Hugging Face intentionally performs the vision rotary multiply in
         # FP32, then returns q/k to their original checkpoint dtype.

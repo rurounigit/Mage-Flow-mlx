@@ -22,10 +22,10 @@ import mlx.core as mx
 
 @partial(mx.compile, shapeless=True)
 def _step(noise: mx.array, latents: mx.array, s1: mx.array, s2: mx.array) -> mx.array:
-    """Euler step: x_{t+1} = x_t + (s1 - s2) * noise"""
-    dt = (s1 - s2).astype(latents.dtype)
-    noise = noise.astype(latents.dtype)
-    return latents + dt * noise
+    """Euler step matching mflux's FP32 update before dtype restoration."""
+    updated = latents.astype(mx.float32)
+    updated = updated + (s1 - s2).astype(mx.float32) * noise.astype(mx.float32)
+    return updated.astype(latents.dtype)
 
 
 class FlowMatchEulerDiscreteScheduler:

@@ -509,7 +509,7 @@ def build_mrope_position_ids(
 
     if image_index != grids.shape[0]:
         raise ValueError("image_grid_thw provides more images than input_ids reference")
-    return mx.array(positions, dtype=mx.int32), mx.array(deltas, dtype=np.int32)[:, None]
+    return mx.array(positions, dtype=mx.int32), mx.array(deltas, dtype=mx.int32)[:, None]
 
 
 # ---------------------------------------------------------------------------

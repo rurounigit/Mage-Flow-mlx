@@ -82,12 +82,14 @@ def map_dit_key(key: str) -> str | None:
 
 
 def map_text_encoder_key(key: str) -> str | None:
-    """Map Hugging Face Qwen3-VL text keys to mlx-lm's module tree."""
+    """Map Qwen3-VL keys exactly like mflux's MageFlowWeightMapping."""
+    if key in {"lm_head.weight", "model.visual.rotary_pos_emb.inv_freq"}:
+        return None
     if key.startswith("model.language_model."):
-        return "language_model.model." + key[len("model.language_model."):]
-    if key.startswith("language_model."):
-        return key
-    return "language_model." + key
+        return "language_model." + key[len("model.language_model."):]
+    if key.startswith("model.visual."):
+        return "visual." + key[len("model.visual."):]
+    raise ValueError(f"Unexpected Mage Flow text encoder weight: {key}")
 
 
 def map_vae_key(key: str) -> str | None:

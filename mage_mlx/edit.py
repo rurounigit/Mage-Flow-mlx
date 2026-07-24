@@ -207,22 +207,28 @@ class MageFlowEdit:
             [1, target_length, 128] predicted velocity for the target region
         """
         # Run conditional pass
+        cond_mask = text_attention_mask
+        if cond_mask is not None and cond_mask.shape[1] != txt_embeds.shape[1]:
+            cond_mask = mx.ones((txt_embeds.shape[0], txt_embeds.shape[1]))
         v_pred_seq = self.transformer(
             img=latents_seq,
             txt=txt_embeds,
             timesteps=timesteps,
             img_shapes=img_shapes,
-            text_attention_mask=text_attention_mask,
+            text_attention_mask=cond_mask,
         )
 
         # Run unconditional pass for CFG
         if neg_txt_embeds is not None and guidance_scale != 1.0:
+            uncond_mask = text_attention_mask
+            if uncond_mask is not None and uncond_mask.shape[1] != neg_txt_embeds.shape[1]:
+                uncond_mask = mx.ones((neg_txt_embeds.shape[0], neg_txt_embeds.shape[1]))
             v_uncond_seq = self.transformer(
                 img=latents_seq,
                 txt=neg_txt_embeds,
                 timesteps=timesteps,
                 img_shapes=img_shapes,
-                text_attention_mask=text_attention_mask,
+                text_attention_mask=uncond_mask,
             )
             v_pred_seq = v_uncond_seq + guidance_scale * (v_pred_seq - v_uncond_seq)
 
@@ -293,6 +299,9 @@ class MageFlowEdit:
         # 1. Encode reference images via VAE
         if profiler:
             profiler.start("ref_encode")
+        # mflux initializes the Edit VAE with posterior sampling enabled.
+        # Keep txt2img deterministic, but match mflux for reference latents.
+        self.vae.sample_posterior = True
         ref_latents, ref_img_shapes = self.edit_util.encode_references(
             ref_images, height, width, seed=seed
         )

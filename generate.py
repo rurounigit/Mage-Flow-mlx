@@ -247,9 +247,10 @@ def main():
 
 
 def _run_edit(args, prof):
-    """Run the image editing pipeline."""
-    from PIL import Image
-    from mage_mlx import MageFlowEdit, MageFlowPipeline
+    """Run the image editing pipeline using mflux's MageFlowEdit."""
+    from mage_mlx.mflux_src.mflux.models.mage_flow.variants.edit.mage_flow_edit import (
+        MageFlowEdit,
+    )
 
     if args.ref_images is None:
         # Use the target image as its own reference (mflux --image-paths semantics)
@@ -261,30 +262,17 @@ def _run_edit(args, prof):
             print("Error: at least one reference image is required")
             sys.exit(1)
 
-    print(f"Loading Mage-Flow MLX edit pipeline from {args.model}...")
+    print(f"Loading Mage-Flow-Edit pipeline from {args.model}...")
     try:
-        pipeline = MageFlowPipeline.from_pretrained(
-            model_dir=args.model,
-            num_steps=args.steps,
+        edit = MageFlowEdit(
             quantize=args.quantize,
-            profiler=prof,
+            model_path=args.model,
         )
-        print("  Pipeline loaded successfully!")
+        print("  Edit pipeline loaded successfully!")
     except Exception as e:
-        print(f"  ERROR loading pipeline: {e}")
+        print(f"  ERROR loading edit pipeline: {e}")
         traceback.print_exc()
         sys.exit(1)
-
-    edit = MageFlowEdit(
-        transformer=pipeline.transformer,
-        vae=pipeline.vae,
-        text_encoder=pipeline.text_encoder,
-        num_steps=args.steps,
-    )
-
-    # Load images
-    target_image = Image.open(args.image).convert("RGB")
-    ref_images = [Image.open(p).convert("RGB") for p in ref_paths]
 
     print(f"\nEditing {args.height}x{args.width} image...")
     print(f"  Target: {args.image}")
@@ -293,20 +281,21 @@ def _run_edit(args, prof):
     print(f"  Steps: {args.steps}, Seed: {args.seed}")
 
     prof.start("edit")
-    image = edit.edit(
-        target_image=target_image,
-        ref_images=ref_images,
-        prompt=args.prompt,
+    generated = edit.generate_image(
         seed=args.seed,
+        prompt=args.prompt,
+        image_paths=[args.image] + ref_paths,
+        num_inference_steps=args.steps,
         height=args.height,
         width=args.width,
-        guidance_scale=args.guidance,
+        guidance=args.guidance,
         negative_prompt=args.negative_prompt,
         renormalization=args.renormalization,
-        profiler=prof,
-        tokenizer=pipeline.tokenizer,
     )
     prof.stop("edit")
+
+    # Extract PIL image from GeneratedImage
+    image = generated.image
 
     # Save
     prof.start("save_png")
