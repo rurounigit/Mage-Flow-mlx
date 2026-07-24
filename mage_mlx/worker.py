@@ -318,9 +318,6 @@ def run_worker(
             profiler.stop(f"save_{i + 1}")
         print(f"  Saved to {params['output']}")
 
-    if profiler:
-        profiler.print_report("Mage-Flow MLX Worker — Full Run Profile")
-
 
 def _generate_with_cached_embeds(
     pipeline: "MageFlowPipeline",
