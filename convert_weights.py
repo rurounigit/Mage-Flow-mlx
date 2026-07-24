@@ -4,10 +4,10 @@ This script:
 1. Downloads weights from HuggingFace (microsoft/Mage-Flow-Turbo)
 2. Converts PyTorch safetensors → MLX format tensor-by-tensor (low RAM usage)
 3. Preserves the source BF16 precision for generation quality
-4. Saves as MLX safetensors in models/mage_flow_mlx/
+4. Saves as MLX safetensors in models/microsoft_Mage-Flow-Turbo/
 
 Usage:
-    python convert_weights.py [--repo microsoft/Mage-Flow-Turbo] [--output models/mage_flow_mlx]
+    python convert_weights.py [--repo microsoft/Mage-Flow-Turbo] [--output models/microsoft_Mage-Flow-Turbo]
 """
 
 from __future__ import annotations
@@ -55,6 +55,10 @@ def process_and_convert_file(
             arr = torch_to_mlx(tensor)
             if arr.ndim == 4:
                 arr = mx.transpose(arr, (0, 2, 3, 1))
+            elif arr.ndim == 5:
+                # PyTorch Conv3d [out, in, D, H, W] -> MLX channel-last
+                # Conv3d [out, D, H, W, in].
+                arr = mx.transpose(arr, (0, 2, 3, 4, 1))
             mx.eval(arr)
             converted[mapped_key] = arr
             del tensor, arr
@@ -133,7 +137,7 @@ def map_vae_key(key: str) -> str | None:
 def main():
     parser = argparse.ArgumentParser(description="Convert Mage-Flow PyTorch weights to MLX (Low Memory)")
     parser.add_argument("--repo", default="microsoft/Mage-Flow-Turbo", help="HuggingFace repo ID")
-    parser.add_argument("--output", default="models/mage_flow_mlx", help="Output directory")
+    parser.add_argument("--output", default="models/microsoft_Mage-Flow-Turbo", help="Output directory")
     args = parser.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
@@ -192,6 +196,10 @@ def main():
                         del t
                         continue
                     mx_arr = torch_to_mlx(t)
+                    if mx_arr.ndim == 4:
+                        mx_arr = mx.transpose(mx_arr, (0, 2, 3, 1))
+                    elif mx_arr.ndim == 5:
+                        mx_arr = mx.transpose(mx_arr, (0, 2, 3, 4, 1))
                     mx.eval(mx_arr)
                     mlx_te[mapped_key] = mx_arr
                     del t, mx_arr

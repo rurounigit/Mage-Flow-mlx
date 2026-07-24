@@ -18,7 +18,7 @@ Usage:
     from mage_mlx.edit import MageFlowEdit
     from mage_mlx.pipeline import MageFlowPipeline
 
-    pipeline = MageFlowPipeline.from_pretrained("models/mage_flow_mlx")
+    pipeline = MageFlowPipeline.from_pretrained("models/microsoft_Mage-Flow-Turbo")
     edit = MageFlowEdit(
         transformer=pipeline.transformer,
         vae=pipeline.vae,

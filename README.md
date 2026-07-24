@@ -42,7 +42,7 @@ cached separately without modifying the canonical checkpoint.
 
 You no longer need to run `convert_weights.py` manually. When you run `generate.py`, the pipeline will:
 
-1. Check if converted MLX weights exist locally (default: `models/mage_flow_mlx/`)
+1. Check if converted MLX weights exist locally (default: `models/microsoft_Mage-Flow-Turbo/`)
 2. If missing, automatically download the raw PyTorch weights from HuggingFace (`microsoft/Mage-Flow-Turbo`)
 3. Convert them to native MLX BF16 format on-the-fly
 4. Cache the converted weights for instant startup on subsequent runs
@@ -51,10 +51,10 @@ When `--quantize 4` or `--quantize 8` is requested for the first time, the
 pipeline derives and atomically saves a persistent packed DiT variant:
 
 ```text
-models/mage_flow_mlx/transformer_quant4.safetensors
-models/mage_flow_mlx/transformer_quant4.json
-models/mage_flow_mlx/transformer_quant8.safetensors
-models/mage_flow_mlx/transformer_quant8.json
+models/microsoft_Mage-Flow-Turbo/transformer_quant4.safetensors
+models/microsoft_Mage-Flow-Turbo/transformer_quant4.json
+models/microsoft_Mage-Flow-Turbo/transformer_quant8.safetensors
+models/microsoft_Mage-Flow-Turbo/transformer_quant8.json
 ```
 
 Later runs construct the matching `nn.QuantizedLinear` module layout and load
@@ -69,13 +69,13 @@ You can also explicitly pass a HuggingFace repo ID:
 python generate.py --model microsoft/Mage-Flow-Turbo --prompt "..."
 
 # Or use a local converted directory
-python generate.py --model models/mage_flow_mlx --prompt "..."
+python generate.py --model models/microsoft_Mage-Flow-Turbo --prompt "..."
 ```
 
 If you prefer to pre-convert weights manually (e.g., for offline use or custom repos), you can still use:
 
 ```bash
-python convert_weights.py --repo microsoft/Mage-Flow-Turbo --output models/mage_flow_mlx
+python convert_weights.py --repo microsoft/Mage-Flow-Turbo --output models/microsoft_Mage-Flow-Turbo
 ```
 
 ## Generation parameters
@@ -87,7 +87,7 @@ python generate.py [OPTIONS]
 | Parameter | Default | Description |
 |---|---:|---|
 | `--prompt TEXT` | required | Description of the image to generate. Concrete subjects, composition, lighting, and style generally produce the most predictable result. |
-| `--model PATH` | `models/mage_flow_mlx` | Directory containing converted MLX weights, or a HuggingFace repo ID (e.g. `microsoft/Mage-Flow-Turbo`). On first run, weights are auto-downloaded and converted. |
+| `--model PATH` | `models/microsoft_Mage-Flow-Turbo` | Directory containing converted MLX weights, or a HuggingFace repo ID (e.g. `microsoft/Mage-Flow-Turbo`). On first run, weights are auto-downloaded and converted. |
 | `--steps INTEGER` | `4` | Number of flow-matching denoising steps. Mage-Flow-Turbo is trained for four steps; increasing this is not guaranteed to improve quality and changes the scheduler trajectory. |
 | `--height INTEGER` | `1024` | Output height in pixels. Must be a positive multiple of 16. Higher resolutions require more unified memory and take longer. |
 | `--width INTEGER` | `1024` | Output width in pixels. Must be a positive multiple of 16. Non-square aspect ratios are supported. |

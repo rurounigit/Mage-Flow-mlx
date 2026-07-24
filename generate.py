@@ -99,7 +99,7 @@ def main():
         args.model = (
             "microsoft/Mage-Flow-Edit-Turbo"
             if args.image is not None
-            else "models/mage_flow_mlx"
+            else "models/microsoft_Mage-Flow-Turbo"
         )
 
     # Validate: need either --prompt or --worker

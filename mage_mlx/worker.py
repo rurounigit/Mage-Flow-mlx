@@ -161,7 +161,7 @@ def run_worker(
     print(f"Loaded {len(prompts)} prompts from {jsonl_path}")
 
     # Initialize cache
-    cache = EmbeddingCache(defaults.get("model", "models/mage_flow_mlx"))
+    cache = EmbeddingCache(defaults.get("model", "models/microsoft_Mage-Flow-Turbo"))
 
     # Track current pipeline state
     current_params: dict[str, Any] = {}

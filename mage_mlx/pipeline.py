@@ -5,7 +5,7 @@ and scheduler (FlowMatchEulerDiscrete) to generate images from text prompts.
 
 Usage:
     from mage_mlx import MageFlowPipeline
-    pipeline = MageFlowPipeline.from_pretrained("models/mage_flow_mlx")
+    pipeline = MageFlowPipeline.from_pretrained("models/microsoft_Mage-Flow-Turbo")
     image = pipeline.generate("A futuristic cityscape at sunset")
 """
 
@@ -22,7 +22,7 @@ import numpy as np
 from PIL import Image
 
 from .dit import MageFlow, MageFlowParams
-from .loader import _read_safetensors_header, ensure_mlx_model
+from .loader import _read_safetensors_header, ensure_mlx_model, resolve_text_encoder_path
 from .processor import MageFlowQwen3VLProcessor
 from .scheduler import FlowMatchEulerDiscreteScheduler
 from .text_encoder import MageFlowTextEncoder
@@ -191,7 +191,7 @@ class MageFlowPipeline:
     @classmethod
     def from_pretrained(
         cls,
-        model_dir: str = "models/mage_flow_mlx",
+        model_dir: str = "models/microsoft_Mage-Flow-Turbo",
         num_steps: int = 4,
         quantize: int | None = None,
         profiler: Optional["object"] = None,
@@ -302,7 +302,7 @@ class MageFlowPipeline:
         # Load text encoder (lazy — model weights are loaded on first use)
         if profiler:
             profiler.start("text_encoder_load")
-        te_weights_path = os.path.join(model_dir, "text_encoder.safetensors")
+        te_weights_path = resolve_text_encoder_path(model_dir)
         text_encoder = MageFlowTextEncoder(
             model_path=te_weights_path if os.path.exists(te_weights_path) else None,
         )

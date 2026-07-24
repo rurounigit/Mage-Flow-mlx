@@ -13,7 +13,7 @@ with 8 GiB of model weights.
 Usage:
     from mage_mlx.embedding_cache import EmbeddingCache
 
-    cache = EmbeddingCache(model_dir="models/mage_flow_mlx")
+    cache = EmbeddingCache(model_dir="models/microsoft_Mage-Flow-Turbo")
     key = cache.make_key(prompt="A cat", negative_prompt=" ", te_path="text_encoder.safetensors")
     embeds = cache.get(key)
     if embeds is None:
@@ -46,7 +46,7 @@ class EmbeddingCache:
             ``model_dir/embedding_cache/``)
     """
 
-    def __init__(self, model_dir: str = "models/mage_flow_mlx"):
+    def __init__(self, model_dir: str = "models/microsoft_Mage-Flow-Turbo"):
         self.cache_dir = os.path.join(model_dir, "embedding_cache")
         os.makedirs(self.cache_dir, exist_ok=True)
 

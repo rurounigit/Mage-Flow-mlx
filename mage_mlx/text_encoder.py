@@ -24,7 +24,7 @@ Usage:
     from mage_mlx.processor import MageFlowQwen3VLProcessor
     from mage_mlx.prompt_processor import MageFlowPromptProcessor
 
-    te = MageFlowTextEncoder(model_path="models/mage_flow_mlx/text_encoder.safetensors")
+    te = MageFlowTextEncoder(model_path="models/shared/mage_flow_qwen3vl/text_encoder.safetensors")
     processor = MageFlowQwen3VLProcessor(tokenizer)
 
     # Text-to-image encoding

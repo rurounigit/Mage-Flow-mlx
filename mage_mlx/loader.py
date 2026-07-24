@@ -98,6 +98,10 @@ def process_and_convert_file(
             arr = torch_to_mlx(tensor)
             if arr.ndim == 4:
                 arr = mx.transpose(arr, (0, 2, 3, 1))
+            elif arr.ndim == 5:
+                # PyTorch Conv3d [out, in, D, H, W] -> MLX channel-last
+                # Conv3d [out, D, H, W, in].
+                arr = mx.transpose(arr, (0, 2, 3, 4, 1))
             mx.eval(arr)
             converted[mapped_key] = arr
             del tensor, arr
@@ -129,6 +133,8 @@ def map_text_encoder_key(key: str) -> str | None:
     can perform multi-modal encoding for image editing.
     """
     # Keep vision tower weights for the native MLX Qwen3-VL text encoder
+    if key.startswith("model.visual."):
+        return "visual." + key[len("model.visual."):]
     if key.startswith("model.vision_tower."):
         return "visual." + key[len("model.vision_tower."):]
     if key.startswith("vision_tower."):
@@ -139,6 +145,46 @@ def map_text_encoder_key(key: str) -> str | None:
         return key
     return "language_model." + key
 
+
+
+SHARED_TEXT_ENCODER_PATH = os.path.join(
+    "models", "shared", "mage_flow_qwen3vl", "text_encoder.safetensors"
+)
+
+
+def _has_visual_weights(path: str) -> bool:
+    """Return whether a converted encoder uses the canonical visual namespace."""
+    if not os.path.exists(path):
+        return False
+    try:
+        with safe_open(path, framework="pt") as f:
+            return any(key.startswith("visual.") for key in f.keys())
+    except (OSError, ValueError):
+        return False
+
+
+def resolve_text_encoder_path(model_dir: str) -> str | None:
+    """Resolve and migrate to the shared Qwen3-VL text encoder cache."""
+    shared = SHARED_TEXT_ENCODER_PATH
+    candidates = [os.path.join(model_dir, "text_encoder.safetensors")]
+    if os.path.isdir("models"):
+        candidates.extend(
+            os.path.join("models", name, "text_encoder.safetensors")
+            for name in os.listdir("models") if name.startswith("microsoft_")
+        )
+    if not _has_visual_weights(shared):
+        source = next((path for path in candidates if _has_visual_weights(path)), None)
+        if source:
+            os.makedirs(os.path.dirname(shared), exist_ok=True)
+            temp = shared + ".tmp"
+            with open(source, "rb") as src, open(temp, "wb") as dst:
+                while chunk := src.read(16 * 1024 * 1024):
+                    dst.write(chunk)
+            os.replace(temp, shared)
+    if _has_visual_weights(shared):
+        return shared
+    local = os.path.join(model_dir, "text_encoder.safetensors")
+    return local if os.path.exists(local) else None
 
 
 def map_vae_key(key: str) -> str | None:
@@ -181,7 +227,7 @@ def map_vae_key(key: str) -> str | None:
 
 
 def ensure_mlx_model(
-    model_path_or_repo: str = "models/mage_flow_mlx",
+    model_path_or_repo: str = "models/microsoft_Mage-Flow-Turbo",
     quantize: int | None = None,
 ) -> tuple[str, int | None]:
     """Ensure that converted MLX model weights exist at model_path_or_repo.
@@ -208,6 +254,15 @@ def ensure_mlx_model(
         output_dir = model_path_or_repo
         repo_id = "microsoft/Mage-Flow-Turbo"
 
+    # Migrate the original local default without copying multi-GB files.  Keep
+    # a symlink at the legacy path so existing scripts remain compatible.
+    canonical_default = os.path.join("models", "microsoft_Mage-Flow-Turbo")
+    legacy_default = os.path.join("models", "mage_flow_mlx")
+    if output_dir == canonical_default and not os.path.exists(output_dir):
+        if os.path.isdir(legacy_default) and os.path.exists(os.path.join(legacy_default, "transformer.safetensors")):
+            os.rename(legacy_default, canonical_default)
+            os.symlink(os.path.basename(canonical_default), legacy_default)
+
     # A quantized checkpoint cannot be loaded into the model's nn.Linear layers.
     # Validate the base checkpoint's format, not just its presence.
     transformer_out = os.path.join(output_dir, "transformer.safetensors")
@@ -217,7 +272,14 @@ def ensure_mlx_model(
         for f in required_files
         if f != "transformer.safetensors"
     )
-    all_exist = transformer_valid and other_files_exist
+    local_te_cache = os.path.join(output_dir, "text_encoder.safetensors")
+    visual_weights_valid = _has_visual_weights(SHARED_TEXT_ENCODER_PATH) or _has_visual_weights(local_te_cache)
+    all_exist = transformer_valid and other_files_exist and visual_weights_valid
+    if not visual_weights_valid:
+        # The cache predates visual-key conversion; force text-encoder rebuild.
+        te_cache = os.path.join(output_dir, "text_encoder.safetensors")
+        if os.path.exists(te_cache) and not _has_visual_weights(SHARED_TEXT_ENCODER_PATH):
+            os.remove(te_cache)
     if not all_exist:
         print(f"🔄 Converted MLX weights not found in '{output_dir}'.")
         print(f"📥 Downloading and converting weights from {repo_id} (this happens only once)...")
@@ -274,8 +336,9 @@ def ensure_mlx_model(
         print("Converting Text Encoder weights...")
         te_dir = os.path.join(repo_dir, "text_encoder")
         mlx_te = {}
-        te_out_path = os.path.join(output_dir, "text_encoder.safetensors")
-        if not os.path.exists(te_out_path) and os.path.exists(te_dir):
+        te_out_path = SHARED_TEXT_ENCODER_PATH
+        if not _has_visual_weights(te_out_path) and os.path.exists(te_dir):
+            os.makedirs(os.path.dirname(te_out_path), exist_ok=True)
             for shard in sorted(os.listdir(te_dir)):
                 if shard.endswith(".safetensors"):
                     shard_path = os.path.join(te_dir, shard)
@@ -287,6 +350,10 @@ def ensure_mlx_model(
                                 del t
                                 continue
                             mx_arr = torch_to_mlx(t)
+                            if mx_arr.ndim == 4:
+                                mx_arr = mx.transpose(mx_arr, (0, 2, 3, 1))
+                            elif mx_arr.ndim == 5:
+                                mx_arr = mx.transpose(mx_arr, (0, 2, 3, 4, 1))
                             mx.eval(mx_arr)
                             mlx_te[mapped_key] = mx_arr
                             del t, mx_arr
