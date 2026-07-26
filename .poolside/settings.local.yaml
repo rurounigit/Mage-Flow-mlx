@@ -1,0 +1,11 @@
+tools:
+    shell:
+        allow:
+            - find *
+            - head *
+            - ls *
+            - xargs *
+            - grep *
+            - cd *
+            - .venv/bin/python *
+            - tail *

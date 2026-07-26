@@ -201,10 +201,10 @@ class Profiler:
             else:
                 rss_str = f"{rec.peak_rss_gib:.2f}" if rec.peak_rss_gib is not None else "N/A"
             lines.append(f"| {rec.name} | {rec.elapsed:.4f} | {rss_str} | |")
-            # Each metadata key-value pair on its own row (new paragraph)
+            # Each metadata key-value pair on its own line, no indentation
             if rec.metadata:
                 for k, v in rec.metadata.items():
-                    lines.append(f"| | | | {k}={v} |")
+                    lines.append(f"{k}={v}")
 
         # Show total only if total_wall_clock is NOT already in the records
         has_total = any(r.name == "total_wall_clock" for r in self._records)
@@ -306,10 +306,10 @@ class Profiler:
             else:
                 rss_str = f"{rec.peak_rss_gib:>14.2f}" if rec.peak_rss_gib is not None else "              N/A"
             lines.append(f"  {rec.name:<40} {rec.elapsed:>10.4f}   {rss_str}")
-            # Each metadata key-value pair on its own line (new paragraph)
+            # Each metadata key-value pair on its own line, no indentation
             if rec.metadata:
                 for k, v in rec.metadata.items():
-                    lines.append(f"    {k}={v}")
+                    lines.append(f"{k}={v}")
 
         # Show total only if total_wall_clock is NOT already in the records
         has_total = any(r.name == "total_wall_clock" for r in self._records)
