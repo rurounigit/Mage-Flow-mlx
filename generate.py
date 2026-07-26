@@ -173,7 +173,7 @@ def main():
         )
 
     # --- Phase: Python/import startup ---
-    from mage_mlx.profiler import Profiler, LiveReport
+    from mage_mlx.profiler import Profiler, LiveReport, _C
 
     prof = Profiler(enabled=args.metadata, track_memory=args.metadata)
 
@@ -243,7 +243,7 @@ def main():
             )
             report.print_run_metadata(metadata)
             base_path = os.path.splitext(args.worker)[0]
-            print(f"\n  Metadata saved to {base_path}.json and {base_path}.md")
+            print(f"\n  Metadata saved to {_C.GREEN}{base_path}.json{_C.RESET} and {_C.GREEN}{base_path}.md{_C.RESET}")
         return
 
     # --- Benchmark cleanup mode ---
@@ -290,7 +290,7 @@ def main():
                 report.print_run_metadata(metadata)
             base_path = os.path.splitext(args.output)[0]
             prof.save_metadata(base_path, metadata)
-            print(f"  Metadata saved to {base_path}.json and {base_path}.md")
+            print(f"  Metadata saved to {_C.GREEN}{base_path}.json{_C.RESET} and {_C.GREEN}{base_path}.md{_C.RESET}")
         return
 
     # --- Phase: Pipeline load (DiT + VAE + text encoder) ---
@@ -379,7 +379,7 @@ def main():
         report.print_run_metadata(metadata)
         base_path = os.path.splitext(args.output)[0]
         prof.save_metadata(base_path, metadata)
-        print(f"  Metadata saved to {base_path}.json and {base_path}.md")
+        print(f"  Metadata saved to {_C.GREEN}{base_path}.json{_C.RESET} and {_C.GREEN}{base_path}.md{_C.RESET}")
 
 
 def _run_edit(args, prof, report=None):
