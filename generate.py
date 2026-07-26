@@ -173,15 +173,28 @@ def main():
         )
 
     # --- Phase: Python/import startup ---
-    from mage_mlx.profiler import Profiler
+    from mage_mlx.profiler import Profiler, LiveReport
 
     prof = Profiler(enabled=args.metadata, track_memory=args.metadata)
+
+    # Create LiveReport for real-time terminal output
+    if args.metadata:
+        report = LiveReport(title="Mage-Flow MLX")
+        # Real-time callback: report sub-phases as they complete
+        _EXPLICIT_PREFIXES = ("pipeline_reload", "text_encoder_unload", "text_encode_", "generation_", "save_", "total_wall_clock", "python_startup", "edit")
+        def _on_phase_complete(name, elapsed, rss):
+            if any(name.startswith(p) for p in _EXPLICIT_PREFIXES):
+                return  # handled explicitly via stop_phase
+            report.stop_phase(name, elapsed or 0.0, rss)
+        prof.on_phase_complete = _on_phase_complete
+    else:
+        report = None
 
     prof.start("total_wall_clock")
     prof.start("python_startup")
 
     # Load pipeline (auto-downloads and converts weights if needed)
-    print(f"Importing Mage-Flow MLX pipeline from {args.model}...")
+    print(f"  Importing Mage-Flow MLX pipeline from {args.model}...")
     print(f"  Current working directory: {os.getcwd()}")
     print(f"  Python executable: {sys.executable}")
 
@@ -194,6 +207,8 @@ def main():
         sys.exit(1)
 
     prof.stop("python_startup")
+    if report:
+        report.stop_phase("python_startup", prof.get_elapsed("python_startup") or 0.0, prof._get_rss_gib())
 
     # --- Worker mode ---
     if args.worker:
@@ -209,15 +224,21 @@ def main():
             "negative_prompt": args.negative_prompt,
             "quantize": args.quantize,
         }
-        metadata = run_worker(
+        metadata, prompt_metadata = run_worker(
             args.worker,
             defaults,
             profiler=prof,
             metadata_enabled=args.metadata,
+            report=report,
         )
         prof.stop("total_wall_clock")
-        if args.metadata:
-            prof.print_report(metadata=metadata)
+        if args.metadata and report:
+            report.stop_phase("total_wall_clock", prof.get_elapsed("total_wall_clock") or 0.0)
+            report.print_summary(
+                total_time=prof.get_elapsed("total_wall_clock") or 0.0,
+                peak_ram=prof._get_rss_gib() or 0.0,
+            )
+            report.print_run_metadata(metadata)
         return
 
     # --- Benchmark cleanup mode ---
@@ -230,7 +251,7 @@ def main():
 
     # --- Edit mode ---
     if args.image is not None:
-        _run_edit(args, prof)
+        _run_edit(args, prof, report)
         prof.stop("total_wall_clock")
         if args.metadata:
             # For edit: image_path = target image, image_paths = reference images
@@ -245,7 +266,23 @@ def main():
                 generation_time=prof.get_elapsed("total_wall_clock"),
                 peak_memory_gib=prof._get_rss_gib(),
             )
-            prof.print_report(metadata=metadata)
+            if report:
+                report.stop_phase("total_wall_clock", prof.get_elapsed("total_wall_clock") or 0.0)
+                report.add_prompt(
+                    index=1,
+                    prompt=args.prompt,
+                    resolution=f"{args.width}x{args.height}",
+                    steps=args.steps,
+                    quantize=args.quantize,
+                    generation_time=prof.get_elapsed("edit") or 0.0,
+                    peak_rss_gib=prof._get_rss_gib(),
+                    saved_file=args.output,
+                )
+                report.print_summary(
+                    total_time=prof.get_elapsed("total_wall_clock") or 0.0,
+                    peak_ram=prof._get_rss_gib() or 0.0,
+                )
+                report.print_run_metadata(metadata)
             base_path = os.path.splitext(args.output)[0]
             prof.save_metadata(base_path, metadata)
             print(f"  Metadata saved to {base_path}.json and {base_path}.md")
@@ -254,24 +291,29 @@ def main():
     # --- Phase: Pipeline load (DiT + VAE + text encoder) ---
     prof.start("pipeline_load")
     try:
-        print(f"  Loading model from {args.model}...")
         pipeline = MageFlowPipeline.from_pretrained(
             model_dir=args.model,
             num_steps=args.steps,
             quantize=args.quantize,
             profiler=prof,
         )
-        print("  Pipeline loaded successfully!")
     except Exception as e:
         print(f"  ERROR loading pipeline: {e}")
         traceback.print_exc()
         sys.exit(1)
     prof.stop("pipeline_load")
+    if report:
+        report.stop_phase("pipeline_load", prof.get_elapsed("pipeline_load") or 0.0, prof._get_rss_gib())
+        # Report sub-phases (dit_load, vae_load, text_encoder_load)
+        report.report_profiler_phases(prof)
 
     # --- Phase: Generation ---
-    print(f"\nGenerating {args.height}x{args.width} image...")
-    print(f"Prompt: {args.prompt}")
-    print(f"Steps: {args.steps}, Seed: {args.seed}")
+    # Set metadata BEFORE generation starts (so it appears right after prompt header)
+    if report:
+        report.add_metadata("generation", "prompt", args.prompt)
+        report.add_metadata("generation", "resolution", f"{args.width}x{args.height}")
+        report.add_metadata("generation", "steps", str(args.steps))
+        report.add_metadata("generation", "quantize", str(args.quantize))
 
     prof.start("generation")
     image = pipeline.generate(
@@ -284,8 +326,13 @@ def main():
         profiler=prof,
     )
     prof.stop("generation")
+    if report:
+        # Report sub-phases (text_encode, dit_step_N, vae_decode, etc.)
+        # BEFORE the generation row so they appear in order
+        report.report_profiler_phases(prof, exclude="generation")
+        report.stop_phase("generation", prof.get_elapsed("generation") or 0.0, prof._get_rss_gib())
 
-    # Add per-prompt metadata to the generation phase (ordered: prompt, resolution, steps, quantize)
+    # Also set metadata on profiler for JSON/markdown output
     if args.metadata:
         prof.set_metadata("generation", "prompt", args.prompt)
         prof.set_metadata("generation", "resolution", f"{args.width}x{args.height}")
@@ -296,14 +343,26 @@ def main():
     prof.start("save_png")
     image.save(args.output)
     prof.stop("save_png")
-    print(f"\nImage saved to {args.output}")
-    print(f"   Size: {image.size}")
+    if report:
+        report.stop_phase("save_png", prof.get_elapsed("save_png") or 0.0, prof._get_rss_gib(), saved_file=args.output)
 
     prof.stop("total_wall_clock")
+    if report:
+        report.stop_phase("total_wall_clock", prof.get_elapsed("total_wall_clock") or 0.0)
+        # Add to LiveReport for per-prompt summary table
+        report.add_prompt(
+            index=1,
+            prompt=args.prompt,
+            resolution=f"{args.width}x{args.height}",
+            steps=args.steps,
+            quantize=args.quantize,
+            generation_time=prof.get_elapsed("generation") or 0.0,
+            peak_rss_gib=prof._get_rss_gib(),
+            saved_file=args.output,
+        )
 
     # --- Report + Metadata ---
     if args.metadata:
-        # For txt2img: image_path = null, image_paths = null (only applies to edit)
         metadata = _collect_metadata(
             model=args.model,
             image_path=None,
@@ -311,13 +370,17 @@ def main():
             generation_time=prof.get_elapsed("total_wall_clock"),
             peak_memory_gib=prof._get_rss_gib(),
         )
-        prof.print_report(metadata=metadata)
+        report.print_summary(
+            total_time=prof.get_elapsed("total_wall_clock") or 0.0,
+            peak_ram=prof._get_rss_gib() or 0.0,
+        )
+        report.print_run_metadata(metadata)
         base_path = os.path.splitext(args.output)[0]
         prof.save_metadata(base_path, metadata)
         print(f"  Metadata saved to {base_path}.json and {base_path}.md")
 
 
-def _run_edit(args, prof):
+def _run_edit(args, prof, report=None):
     """Run the image editing pipeline using mflux's MageFlowEdit."""
     from mage_mlx.mflux_src.mflux.models.mage_flow.variants.edit.mage_flow_edit import (
         MageFlowEdit,
@@ -333,23 +396,28 @@ def _run_edit(args, prof):
             print("Error: at least one reference image is required")
             sys.exit(1)
 
-    print(f"Loading Mage-Flow-Edit pipeline from {args.model}...")
     try:
+        prof.start("pipeline_load")
         edit = MageFlowEdit(
             quantize=args.quantize,
             model_path=args.model,
         )
-        print("  Edit pipeline loaded successfully!")
+        prof.stop("pipeline_load")
     except Exception as e:
         print(f"  ERROR loading edit pipeline: {e}")
         traceback.print_exc()
         sys.exit(1)
 
-    print(f"\nEditing {args.height}x{args.width} image...")
-    print(f"  Target: {args.image}")
-    print(f"  References: {ref_paths}")
-    print(f"  Prompt: {args.prompt}")
-    print(f"  Steps: {args.steps}, Seed: {args.seed}")
+    # Report pipeline_load phase to LiveReport
+    if report:
+        report.stop_phase("pipeline_load", prof.get_elapsed("pipeline_load") or 0.0, prof._get_rss_gib())
+
+    # Set metadata BEFORE edit starts (so it appears right after prompt header)
+    if report:
+        report.add_metadata("edit", "prompt", args.prompt)
+        report.add_metadata("edit", "resolution", f"{args.width}x{args.height}")
+        report.add_metadata("edit", "steps", str(args.steps))
+        report.add_metadata("edit", "quantize", str(args.quantize))
 
     prof.start("edit")
     generated = edit.generate_image(
@@ -364,8 +432,10 @@ def _run_edit(args, prof):
         renormalization=args.renormalization,
     )
     prof.stop("edit")
+    if report:
+        report.stop_phase("edit", prof.get_elapsed("edit") or 0.0, prof._get_rss_gib())
 
-    # Add per-prompt metadata to the edit phase (ordered: prompt, resolution, steps, quantize)
+    # Also set metadata on profiler for JSON/markdown output
     if prof.enabled:
         prof.set_metadata("edit", "prompt", args.prompt)
         prof.set_metadata("edit", "resolution", f"{args.width}x{args.height}")
@@ -379,8 +449,8 @@ def _run_edit(args, prof):
     prof.start("save_png")
     image.save(args.output)
     prof.stop("save_png")
-    print(f"\nEdited image saved to {args.output}")
-    print(f"   Size: {image.size}")
+    if report:
+        report.stop_phase("save_png", prof.get_elapsed("save_png") or 0.0, prof._get_rss_gib(), saved_file=args.output)
 
 
 def _benchmark_cleanup(args, prof):

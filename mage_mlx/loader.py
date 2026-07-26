@@ -368,6 +368,6 @@ def ensure_mlx_model(
 
         print(f"✅ Auto-conversion complete! Weights cached at {output_dir}")
     else:
-        print(f"✅ Loaded cached MLX weights from {output_dir}")
+        pass  # Weights already cached, no need to print
 
     return output_dir, quantize

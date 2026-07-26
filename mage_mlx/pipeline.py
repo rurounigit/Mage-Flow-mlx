@@ -254,16 +254,11 @@ class MageFlowPipeline:
                 transformer.load_weights(quantized_path, strict=True)
                 if profiler:
                     profiler.stop("dit_load")
-                print(
-                    f"  Loaded cached {actual_quantize}-bit DiT: "
-                    f"{quantized_layers} quantized layers"
-                )
             else:
                 if profiler:
                     profiler.start("dit_load")
                 weights = mx.load(dit_weights_path)
                 transformer.load_weights(list(weights.items()), strict=False)
-                print(f"  Loaded DiT: {len(weights)} tensors (BF16)")
                 del weights
                 print(f"  Quantizing DiT to {actual_quantize}-bit...")
                 quantized_layers = _quantize_transformer(
@@ -288,7 +283,6 @@ class MageFlowPipeline:
             transformer.load_weights(list(weights.items()), strict=False)
             if profiler:
                 profiler.stop("dit_load")
-            print(f"  Loaded DiT: {len(weights)} tensors (BF16)")
 
         # Load VAE
         if profiler:
@@ -297,7 +291,7 @@ class MageFlowPipeline:
         vae = MageVAE(vae_weights_path, sample_posterior=True)
         if profiler:
             profiler.stop("vae_load")
-        print(f"  Loaded VAE")
+            profiler.set_metadata("vae_load", "tensors", str(getattr(vae, "num_tensors", 0)))
 
         # Load text encoder (lazy — model weights are loaded on first use)
         if profiler:
@@ -308,7 +302,7 @@ class MageFlowPipeline:
         )
         if profiler:
             profiler.stop("text_encoder_load")
-        print(f"  Loaded text encoder")
+            profiler.set_metadata("text_encoder_load", "tensors", str(getattr(text_encoder, "num_tensors", 0)))
 
         # Load tokenizer for text encoding
         from transformers import AutoTokenizer
@@ -363,14 +357,12 @@ class MageFlowPipeline:
         # 1. Text encoding via Qwen3-VL
         if profiler:
             profiler.start("text_encode")
-        print(f"  Encoding text: '{prompt[:80]}...'")
         txt_embeds, _ = self.text_encoder.encode_text_to_image(
             prompts=[prompt],
             tokenizer=self.tokenizer,
             max_sequence_length=2048,
         )
         mx.eval(txt_embeds)
-        print(f"  Text embeddings: {txt_embeds.shape}")
 
         neg_txt_embeds = None
         if guidance_scale > 1.0:
@@ -380,7 +372,6 @@ class MageFlowPipeline:
                 max_sequence_length=2048,
             )
             mx.eval(neg_txt_embeds)
-            print(f"  Negative text embeddings: {neg_txt_embeds.shape}")
         if profiler:
             profiler.stop("text_encode")
 
@@ -395,7 +386,6 @@ class MageFlowPipeline:
             mx.clear_cache()
         if profiler:
             profiler.stop("text_encoder_unload")
-        print("  Unloaded text encoder")
 
         # 2. Initialize Gaussian noise in latent space (NHWC)
         latents = mx.random.normal((1, lat_h, lat_w, 128)).astype(mx.bfloat16)
@@ -442,12 +432,10 @@ class MageFlowPipeline:
             mx.eval(latents)
             if profiler:
                 profiler.stop(f"dit_step_{i + 1}")
-            print(f"  Step {i + 1}/{self.num_steps} complete (sigma={float(sigma):.4f})")
 
         # 4. Decode latent via VAE
         if profiler:
             profiler.start("vae_decode")
-        print("  Decoding latent...")
         images = self.vae.decode(latents)  # [1, H, W, 3] in [-1, 1]
         if profiler:
             profiler.stop("vae_decode")
@@ -540,12 +528,10 @@ class MageFlowPipeline:
             mx.eval(latents)
             if profiler:
                 profiler.stop(f"dit_step_{i + 1}")
-            print(f"  Step {i + 1}/{self.num_steps} complete (sigma={float(sigma):.4f})")
 
         # Decode latent via VAE
         if profiler:
             profiler.start("vae_decode")
-        print("  Decoding latent...")
         images = self.vae.decode(latents)  # [1, H, W, 3] in [-1, 1]
         if profiler:
             profiler.stop("vae_decode")

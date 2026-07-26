@@ -49,6 +49,7 @@ class Profiler:
     track_memory: bool = True
     _records: list[PhaseRecord] = field(default_factory=list)
     _timers: dict[str, list[float]] = field(default_factory=dict)
+    on_phase_complete: Optional[callable] = None  # callback(name, elapsed, peak_rss)
 
     # ------------------------------------------------------------------
     # Memory helpers
@@ -112,6 +113,9 @@ class Profiler:
         elapsed = time.perf_counter() - start
         rss = self._get_rss_gib() if self.track_memory else None
         self._records.append(PhaseRecord(name=name, elapsed=elapsed, peak_rss_gib=rss))
+        # Real-time callback (e.g. LiveReport.start_phase/stop_phase)
+        if self.on_phase_complete is not None:
+            self.on_phase_complete(name, elapsed, rss)
         return elapsed
 
     # ------------------------------------------------------------------
@@ -139,6 +143,13 @@ class Profiler:
             if rec.name == name:
                 rec.metadata[key] = value
                 return
+
+    def get_metadata(self, name: str) -> dict[str, str]:
+        """Return all metadata key-value pairs for a named phase record."""
+        for rec in self._records:
+            if rec.name == name:
+                return dict(rec.metadata)
+        return {}
 
     def total_elapsed(self) -> float:
         """Return total elapsed time across all recorded phases."""
@@ -330,3 +341,291 @@ class Profiler:
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         with open(path, "w") as f:
             f.write(report)
+
+
+# ── Live terminal report renderer ────────────────────────────────────────
+# Extracted from example_realtime_report.py — keeps the exact same styling.
+# Colors: times use relative green/red (min/max midpoint), RAM is cyan,
+# total time is cyan. Real-time phase output has no time coloring.
+class _C:
+    """ANSI color codes matching the template."""
+    RESET   = "\033[0m"
+    BOLD    = "\033[1m"
+    DIM     = "\033[2m"
+    RED     = "\033[31m"
+    GREEN   = "\033[32m"
+    YELLOW  = "\033[33m"
+    BLUE    = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN    = "\033[36m"
+    GRAY    = "\033[90m"
+
+
+def _fmt_time(s: float) -> str:
+    """Format seconds with one decimal place."""
+    return f"{s:.1f}s"
+
+
+def _colorize_time(s: float, min_val: float = 0.0, max_val: float = 0.0) -> str:
+    """Color-code time relative to min/max of all phase times.
+
+    Green = below midpoint, red = above midpoint.
+    If min_val == max_val (no range), uses yellow.
+    """
+    ts = _fmt_time(s)
+    if max_val <= min_val:
+        return f"{_C.YELLOW}{ts}{_C.RESET}"
+    midpoint = (min_val + max_val) / 2
+    if s <= midpoint:
+        return f"{_C.GREEN}{ts}{_C.RESET}"
+    else:
+        return f"{_C.RED}{ts}{_C.RESET}"
+
+
+def _colorize_ram(gib: float) -> str:
+    """Color-code peak RAM with a neutral color (cyan)."""
+    rs = f"{gib:.2f}GiB"
+    return f"{_C.CYAN}{rs}{_C.RESET}"
+
+
+def _colorize_total(s: float) -> str:
+    """Color-code total wall time with the same neutral color as RAM (cyan)."""
+    ts = _fmt_time(s)
+    return f"{_C.CYAN}{ts}{_C.RESET}"
+
+
+@dataclass
+class _PhaseRow:
+    """A single phase row in the live report."""
+    name: str
+    elapsed: Optional[float] = None
+    peak_rss_gib: Optional[float] = None
+    metadata: dict[str, str] = field(default_factory=dict)
+    saved_file: Optional[str] = None
+
+
+@dataclass
+class _PromptRow:
+    """Per-prompt summary row."""
+    index: int
+    prompt: str
+    resolution: str
+    steps: int
+    quantize: Optional[int]
+    generation_time: Optional[float]
+    peak_rss_gib: Optional[float]
+    saved_file: Optional[str]
+
+
+class LiveReport:
+    """Real-time terminal report renderer for the profiler.
+
+    Uses the same styling as the prototype template:
+    - 70-char wide cyan bold separators
+    - Dim column headers
+    - Magenta bold prompt headers
+    - Green arrow (→) for saved files
+    - Relative green/red coloring for times in the summary
+    - Cyan for RAM and total time
+    - No redundant table — real-time output IS the table
+    - Summary section with per-prompt results table
+    - Run Metadata block at the end
+
+    Real-time phase output uses plain text (no time coloring) because
+    min/max are not known until all phases complete.
+    """
+
+    def __init__(self, title: str = "Mage-Flow MLX"):
+        self.title = title
+        self.phases: list[_PhaseRow] = []
+        self.prompts: list[_PromptRow] = []
+        self._phase_times: list[float] = []  # for relative color scaling
+        self._print_header()
+
+    # ── header ──
+    def _print_header(self) -> None:
+        print()
+        print(f"{_C.BOLD}{_C.CYAN}{'=' * 70}{_C.RESET}")
+        print(f"{_C.BOLD}{_C.CYAN}  {self.title}{_C.RESET}")
+        print(f"{_C.BOLD}{_C.CYAN}{'=' * 70}{_C.RESET}")
+        print(f"{_C.DIM}  {'Phase':<42} {'Time':>8}   {'Peak RAM':>10}{_C.RESET}")
+        print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
+
+    # ── phase lifecycle ──
+    def start_phase(self, name: str) -> None:
+        """Called when a phase starts — prints a live indicator."""
+        row = _PhaseRow(name=name)
+        self.phases.append(row)
+        print(f"{_C.GRAY}  ▸ {name:<40}{_C.RESET}", end="", flush=True)
+
+    def stop_phase(
+        self,
+        name: str,
+        elapsed: float,
+        peak_rss_gib: Optional[float] = None,
+        saved_file: Optional[str] = None,
+    ) -> None:
+        """Called when a phase completes — prints timing + RAM."""
+        # Skip if already reported (e.g. via on_phase_complete callback)
+        for r in self.phases:
+            if r.name == name and r.elapsed is not None:
+                return
+        row = None
+        for r in reversed(self.phases):
+            if r.name == name and r.elapsed is None:
+                row = r
+                break
+        if row is None:
+            row = _PhaseRow(name=name)
+            self.phases.append(row)
+
+        row.elapsed = elapsed
+        row.peak_rss_gib = peak_rss_gib
+        row.saved_file = saved_file
+
+        if elapsed is not None:
+            self._phase_times.append(elapsed)
+
+        # Real-time: no time coloring (don't know min/max yet)
+        time_str = _fmt_time(elapsed) if elapsed is not None else f"{_C.GRAY}—{_C.RESET}"
+        ram_str = _colorize_ram(peak_rss_gib) if peak_rss_gib is not None else f"{_C.GRAY}—{_C.RESET}"
+
+        print()  # newline after the ▸ indicator
+        print(f"  {name:<42} {time_str:>8}   {ram_str:>10}", end="")
+        if saved_file:
+            print(f"   {_C.GREEN}→ {saved_file}{_C.RESET}")
+        else:
+            print()
+
+    def add_saved_file(self, name: str, saved_file: str) -> None:
+        """Add a saved_file to an already-reported phase row (e.g. for the green arrow)."""
+        for r in reversed(self.phases):
+            if r.name == name and r.elapsed is not None:
+                r.saved_file = saved_file
+                return
+
+    # ── bulk report from profiler records ──
+    def report_profiler_phases(self, profiler: "Profiler", exclude: Optional[str] = None) -> None:
+        """Report all phases from a Profiler that haven't been reported yet.
+
+        Args:
+            profiler: The Profiler instance to read records from.
+            exclude: Phase name to skip (e.g. the parent phase that will be
+                     reported separately via stop_phase).
+        """
+        reported = {r.name for r in self.phases if r.elapsed is not None}
+        if exclude:
+            reported.add(exclude)
+        for rec in profiler.get_records():
+            if rec.name in reported:
+                continue
+            self.stop_phase(rec.name, rec.elapsed or 0.0, rec.peak_rss_gib)
+            # Report any metadata set on this phase
+            for key, value in profiler.get_metadata(rec.name).items():
+                self.add_metadata(rec.name, key, value)
+            reported.add(rec.name)
+
+    # ── metadata ──
+    def add_metadata(self, phase_name: str, key: str, value: str) -> None:
+        """Attach metadata to a phase — printed with 2-space indent, yellow key."""
+        row = None
+        for r in reversed(self.phases):
+            if r.name == phase_name:
+                row = r
+                break
+        if row is None:
+            row = _PhaseRow(name=phase_name)
+            self.phases.append(row)
+        row.metadata[key] = value
+        print(f"  {_C.YELLOW}{key}{_C.RESET}:{value}")
+
+    # ── prompt header ──
+    def prompt_header(self, index: int, total: int) -> None:
+        """Print a prompt header (magenta bold)."""
+        print()
+        print(f"{_C.BOLD}{_C.MAGENTA}  Prompt {index}/{total}{_C.RESET}")
+        print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
+
+    # ── prompt summary ──
+    def add_prompt(
+        self,
+        index: int,
+        prompt: str,
+        resolution: str,
+        steps: int,
+        quantize: Optional[int],
+        generation_time: Optional[float],
+        peak_rss_gib: Optional[float],
+        saved_file: Optional[str],
+    ) -> None:
+        """Add a per-prompt summary row."""
+        pr = _PromptRow(
+            index=index,
+            prompt=prompt,
+            resolution=resolution,
+            steps=steps,
+            quantize=quantize,
+            generation_time=generation_time,
+            peak_rss_gib=peak_rss_gib,
+            saved_file=saved_file,
+        )
+        self.prompts.append(pr)
+
+    # ── final summary ──
+    def print_summary(self, total_time: float, peak_ram: float) -> None:
+        """Print the final summary section with per-prompt results table."""
+        print()
+        print(f"{_C.BOLD}{_C.CYAN}{'─' * 70}{_C.RESET}")
+        print(f"{_C.BOLD}  Summary{_C.RESET}")
+        print(f"{_C.BOLD}{_C.CYAN}{'─' * 70}{_C.RESET}")
+
+        total_str = _colorize_total(total_time)
+        ram_str = _colorize_ram(peak_ram)
+        print(f"  {_C.BOLD}Total time:{_C.RESET}     {total_str}")
+        print(f"  {_C.BOLD}Peak RAM:{_C.RESET}       {ram_str}")
+        print(f"  {_C.BOLD}Prompts:{_C.RESET}        {len(self.prompts)}")
+        print()
+
+        # Per-prompt table
+        if self.prompts:
+            print(f"{_C.BOLD}  Per-Prompt Results:{_C.RESET}")
+            print(f"{_C.DIM}  {'#':>3}  {'Time':>8}   {'Peak RAM':>10}   {'Resolution':>12}   {'Steps':>5}   File{_C.RESET}")
+            print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
+            # Use generation times only for relative coloring
+            gen_times = [p.generation_time for p in self.prompts if p.generation_time is not None]
+            if gen_times:
+                t_min = min(gen_times)
+                t_max = max(gen_times)
+            else:
+                t_min = t_max = 0.0
+            for p in self.prompts:
+                if p.generation_time is not None:
+                    t_str = _colorize_time(p.generation_time, t_min, t_max)
+                else:
+                    t_str = f"{_C.GRAY}—{_C.RESET}"
+                r_str = _colorize_ram(p.peak_rss_gib) if p.peak_rss_gib else f"{_C.GRAY}—{_C.RESET}"
+                file_str = f"{_C.GREEN}{p.saved_file}{_C.RESET}" if p.saved_file else f"{_C.GRAY}—{_C.RESET}"
+                print(
+                    f"  {p.index:>3}  {t_str:>8}   {r_str:>10}   "
+                    f"{p.resolution:>12}   {p.steps:>5}   {file_str}"
+                )
+            print()
+
+        # No redundant phase timings table — already shown in real-time
+
+        print(f"{_C.BOLD}{_C.CYAN}{'=' * 70}{_C.RESET}")
+        print()
+
+    # ── run metadata block ──
+    def print_run_metadata(self, metadata: dict[str, Any]) -> None:
+        """Print the run metadata block at the end."""
+        print(f"{_C.BOLD}  Run Metadata{_C.RESET}")
+        print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
+        for key, value in metadata.items():
+            if key == "generation_time_seconds":
+                print(f"  {key}: {_colorize_total(value)}")
+            elif key == "peak_memory_gib":
+                print(f"  {key}: {_colorize_ram(value)}")
+            else:
+                print(f"  {key}: {value}")
+        print()

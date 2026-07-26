@@ -565,7 +565,7 @@ class MageVAE(nn.Module):
         weights = mx.load(ckpt_path)
 
         self.load_weights(list(weights.items()), strict=False)
-        print(f"  Loaded VAE: {len(weights)} tensors")
+        self.num_tensors = len(weights)
 
     def _named_parameters(self):
         """Yield (path, param) tuples for all parameters."""

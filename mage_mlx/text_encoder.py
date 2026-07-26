@@ -799,7 +799,7 @@ class MageFlowTextEncoder(nn.Module):
         if has_visual_weights:
             self._ensure_visual()
         self.load_weights(list(normalized_weights.items()), strict=False)
-        print(f"  Loaded text encoder: {len(normalized_weights)} tensors")
+        self.num_tensors = len(normalized_weights)
 
     def __call__(
         self,
