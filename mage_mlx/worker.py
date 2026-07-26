@@ -227,7 +227,7 @@ def run_worker(
     if profiler:
         profiler.stop("pipeline_reload")
     if report:
-        report.stop_phase("pipeline_reload", profiler.get_elapsed("pipeline_reload") or 0.0, profiler._get_rss_gib())
+        report.stop_phase("pipeline_reload", profiler.get_elapsed("pipeline_reload") or 0.0, profiler.get_phase_rss("pipeline_reload"))
 
     # --- Phase 1: Pre-encode all prompts (load Qwen once, encode all, unload) ---
     print(f"\n{'=' * 60}")
@@ -262,7 +262,7 @@ def run_worker(
                     profiler.stop(f"text_encode_neg_{i + 1}")
                     profiler.set_metadata(f"text_encode_neg_{i + 1}", "cache", "HIT")
                     if report:
-                        report.stop_phase(f"text_encode_neg_{i + 1}", profiler.get_elapsed(f"text_encode_neg_{i + 1}") or 0.0, profiler._get_rss_gib())
+                        report.stop_phase(f"text_encode_neg_{i + 1}", profiler.get_elapsed(f"text_encode_neg_{i + 1}") or 0.0, profiler.get_phase_rss(f"text_encode_neg_{i + 1}"))
                         report.add_metadata(f"text_encode_neg_{i + 1}", "cache", "HIT")
             prompt_embeds[i] = (cached_embeds, neg_embeds)
             print(f"  Prompt {i + 1}/{len(prompts)}: Cache HIT — skipping Qwen encode")
@@ -297,7 +297,7 @@ def run_worker(
                 profiler.stop(f"text_encode_{i + 1}")
                 profiler.set_metadata(f"text_encode_{i + 1}", "cache", "MISS")
                 if report:
-                    report.stop_phase(f"text_encode_{i + 1}", profiler.get_elapsed(f"text_encode_{i + 1}") or 0.0, profiler._get_rss_gib())
+                    report.stop_phase(f"text_encode_{i + 1}", profiler.get_elapsed(f"text_encode_{i + 1}") or 0.0, profiler.get_phase_rss(f"text_encode_{i + 1}"))
                     report.add_metadata(f"text_encode_{i + 1}", "cache", "MISS")
             print(f"  Prompt {i + 1}/{len(prompts)}: Cache MISS — encoding with Qwen")
 
@@ -310,7 +310,7 @@ def run_worker(
     if profiler:
         profiler.stop("text_encoder_unload")
     if report:
-        report.stop_phase("text_encoder_unload", profiler.get_elapsed("text_encoder_unload") or 0.0, profiler._get_rss_gib())
+        report.stop_phase("text_encoder_unload", profiler.get_elapsed("text_encoder_unload") or 0.0, profiler.get_phase_rss("text_encoder_unload"))
     print("  Qwen unloaded (batch encoding complete)")
 
     # --- Phase 2: Generate all images using cached embeddings ---
@@ -353,8 +353,8 @@ def run_worker(
             if profiler:
                 profiler.stop(f"pipeline_reload_{i + 1}")
             if report:
-                report.stop_phase(f"pipeline_reload_{i + 1}", profiler.get_elapsed(f"pipeline_reload_{i + 1}") or 0.0, profiler._get_rss_gib())
-                report.stop_phase(f"text_encoder_unload_{i + 1}", profiler.get_elapsed(f"text_encoder_unload_{i + 1}") or 0.0, profiler._get_rss_gib())
+                report.stop_phase(f"pipeline_reload_{i + 1}", profiler.get_elapsed(f"pipeline_reload_{i + 1}") or 0.0, profiler.get_phase_rss(f"pipeline_reload_{i + 1}"))
+                report.stop_phase(f"text_encoder_unload_{i + 1}", profiler.get_elapsed(f"text_encoder_unload_{i + 1}") or 0.0, profiler.get_phase_rss(f"text_encoder_unload_{i + 1}"))
 
         # Handle scheduler reset (steps change)
         if needs_scheduler:
@@ -390,7 +390,7 @@ def run_worker(
             profiler.set_metadata(f"generation_{i + 1}", "steps", str(params["steps"]))
             profiler.set_metadata(f"generation_{i + 1}", "quantize", str(params.get("quantize")))
         if report:
-            report.stop_phase(f"generation_{i + 1}", profiler.get_elapsed(f"generation_{i + 1}") or 0.0, profiler._get_rss_gib())
+            report.stop_phase(f"generation_{i + 1}", profiler.get_elapsed(f"generation_{i + 1}") or 0.0, profiler.get_phase_rss(f"generation_{i + 1}"))
 
         # Save image
         if profiler:
@@ -399,7 +399,7 @@ def run_worker(
         if profiler:
             profiler.stop(f"save_{i + 1}")
         if report:
-            report.stop_phase(f"save_{i + 1}", profiler.get_elapsed(f"save_{i + 1}") or 0.0, profiler._get_rss_gib(), saved_file=params["output"])
+            report.stop_phase(f"save_{i + 1}", profiler.get_elapsed(f"save_{i + 1}") or 0.0, profiler.get_phase_rss(f"save_{i + 1}"), saved_file=params["output"])
 
         # Collect per-prompt metadata (with peak RAM)
         gen_elapsed = profiler.get_elapsed(f"generation_{i + 1}") if profiler else None
@@ -448,7 +448,7 @@ def run_worker(
             "image_path": None,
             "image_paths": None,
             "image_strength": None,
-            "peak_memory_gib": profiler._get_rss_gib(),
+            "peak_memory_gib": profiler.get_peak_rss_gib(),
         }
         base_path = os.path.splitext(jsonl_path)[0]
         profiler.save_metadata(base_path, metadata, prompts=prompt_metadata)

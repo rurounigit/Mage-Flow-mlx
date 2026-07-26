@@ -183,8 +183,26 @@ def main():
         # Real-time callback: report sub-phases as they complete
         # Phases that are explicitly reported via stop_phase (skip in callback)
         # Use exact names for numbered phases, prefixes for generic ones
-        _EXPLICIT_EXACT = {"total_wall_clock", "python_startup", "edit", "pipeline_load"}
-        _EXPLICIT_PREFIXES = ("pipeline_reload", "text_encoder_unload", "text_encode_", "generation_", "save_")
+        # Phases reported explicitly via report.stop_phase (skip in callback).
+        # "generation" and "save_png" are single-mode names; worker uses generation_N / save_N.
+        _EXPLICIT_EXACT = {
+            "total_wall_clock",
+            "python_startup",
+            "edit",
+            "pipeline_load",
+            "generation",
+            "save_png",
+        }
+        # Phases that are explicitly reported via report.stop_phase (skip in callback).
+        # "text_encoder_unload" is NOT in this list — it's profiled inside
+        # MageFlowPipeline.generate() but never explicitly reported in single/edit
+        # mode, so it must go through the callback. Worker handles it explicitly.
+        _EXPLICIT_PREFIXES = (
+            "pipeline_reload",
+            "text_encode_",
+            "generation_",
+            "save_",
+        )
         def _on_phase_complete(name, elapsed, rss):
             if name in _EXPLICIT_EXACT or any(name.startswith(p) for p in _EXPLICIT_PREFIXES):
                 return  # handled explicitly via stop_phase
@@ -211,7 +229,11 @@ def main():
 
     prof.stop("python_startup")
     if report:
-        report.stop_phase("python_startup", prof.get_elapsed("python_startup") or 0.0, prof._get_rss_gib())
+        report.stop_phase(
+            "python_startup",
+            prof.get_elapsed("python_startup") or 0.0,
+            prof.get_phase_rss("python_startup"),
+        )
 
     # --- Worker mode ---
     if args.worker:
@@ -237,11 +259,17 @@ def main():
         prof.stop("total_wall_clock")
         if args.metadata and report:
             report.stop_phase("total_wall_clock", prof.get_elapsed("total_wall_clock") or 0.0)
+            # Prefer run peak from samples; fall back to metadata peak if present
+            peak_ram = prof.get_peak_rss_gib()
+            if peak_ram is None and metadata:
+                peak_ram = metadata.get("peak_memory_gib")
+            if metadata is not None and peak_ram is not None:
+                metadata["peak_memory_gib"] = peak_ram
             report.print_summary(
                 total_time=prof.get_elapsed("total_wall_clock") or 0.0,
-                peak_ram=prof._get_rss_gib() or 0.0,
+                peak_ram=peak_ram or 0.0,
             )
-            report.print_run_metadata(metadata)
+            report.print_run_metadata(metadata or {})
             base_path = os.path.splitext(args.worker)[0]
             print(f"\n  Metadata saved to {_C.GREEN}{base_path}.json{_C.RESET} and {_C.GREEN}{base_path}.md{_C.RESET}")
         return
@@ -269,7 +297,7 @@ def main():
                 image_path=args.image,
                 image_paths=ref_paths if len(ref_paths) > 1 else None,
                 generation_time=prof.get_elapsed("total_wall_clock"),
-                peak_memory_gib=prof._get_rss_gib(),
+                peak_memory_gib=prof.get_peak_rss_gib(),
             )
             if report:
                 report.stop_phase("total_wall_clock", prof.get_elapsed("total_wall_clock") or 0.0)
@@ -280,12 +308,19 @@ def main():
                     steps=args.steps,
                     quantize=args.quantize,
                     generation_time=prof.get_elapsed("edit") or 0.0,
-                    peak_rss_gib=prof._get_rss_gib(),
+                    peak_rss_gib=prof.get_max_phase_rss(
+                        "edit",
+                        "text_encode",
+                        "text_encoder_unload",
+                        "dit_step_",
+                        "edit_step_",
+                        "vae_decode",
+                    ) or prof.get_peak_rss_gib(),
                     saved_file=args.output,
                 )
                 report.print_summary(
                     total_time=prof.get_elapsed("total_wall_clock") or 0.0,
-                    peak_ram=prof._get_rss_gib() or 0.0,
+                    peak_ram=prof.get_peak_rss_gib() or 0.0,
                 )
                 report.print_run_metadata(metadata)
             base_path = os.path.splitext(args.output)[0]
@@ -308,7 +343,11 @@ def main():
         sys.exit(1)
     prof.stop("pipeline_load")
     if report:
-        report.stop_phase("pipeline_load", prof.get_elapsed("pipeline_load") or 0.0, prof._get_rss_gib())
+        report.stop_phase(
+            "pipeline_load",
+            prof.get_elapsed("pipeline_load") or 0.0,
+            prof.get_phase_rss("pipeline_load"),
+        )
 
     # --- Phase: Generation ---
     # Print prompt header BEFORE generation starts (so it appears right before metadata)
@@ -332,7 +371,18 @@ def main():
     )
     prof.stop("generation")
     if report:
-        report.stop_phase("generation", prof.get_elapsed("generation") or 0.0, prof._get_rss_gib())
+        gen_rss = prof.get_max_phase_rss(
+            "generation",
+            "text_encode",
+            "text_encoder_unload",
+            "dit_step_",
+            "vae_decode",
+        ) or prof.get_phase_rss("generation")
+        report.stop_phase(
+            "generation",
+            prof.get_elapsed("generation") or 0.0,
+            gen_rss,
+        )
 
     # Also set metadata on profiler for JSON/markdown output
     if args.metadata:
@@ -346,7 +396,12 @@ def main():
     image.save(args.output)
     prof.stop("save_png")
     if report:
-        report.stop_phase("save_png", prof.get_elapsed("save_png") or 0.0, prof._get_rss_gib(), saved_file=args.output)
+        report.stop_phase(
+            "save_png",
+            prof.get_elapsed("save_png") or 0.0,
+            prof.get_phase_rss("save_png"),
+            saved_file=args.output,
+        )
 
     prof.stop("total_wall_clock")
     if report:
@@ -359,7 +414,13 @@ def main():
             steps=args.steps,
             quantize=args.quantize,
             generation_time=prof.get_elapsed("generation") or 0.0,
-            peak_rss_gib=prof._get_rss_gib(),
+            peak_rss_gib=prof.get_max_phase_rss(
+                "generation",
+                "text_encode",
+                "text_encoder_unload",
+                "dit_step_",
+                "vae_decode",
+            ) or prof.get_peak_rss_gib(),
             saved_file=args.output,
         )
 
@@ -370,11 +431,11 @@ def main():
             image_path=None,
             image_paths=None,
             generation_time=prof.get_elapsed("total_wall_clock"),
-            peak_memory_gib=prof._get_rss_gib(),
+            peak_memory_gib=prof.get_peak_rss_gib(),
         )
         report.print_summary(
             total_time=prof.get_elapsed("total_wall_clock") or 0.0,
-            peak_ram=prof._get_rss_gib() or 0.0,
+            peak_ram=prof.get_peak_rss_gib() or 0.0,
         )
         report.print_run_metadata(metadata)
         base_path = os.path.splitext(args.output)[0]
@@ -412,7 +473,11 @@ def _run_edit(args, prof, report=None):
 
     # Report pipeline_load phase to LiveReport
     if report:
-        report.stop_phase("pipeline_load", prof.get_elapsed("pipeline_load") or 0.0, prof._get_rss_gib())
+        report.stop_phase(
+            "pipeline_load",
+            prof.get_elapsed("pipeline_load") or 0.0,
+            prof.get_phase_rss("pipeline_load"),
+        )
 
     # Set metadata BEFORE edit starts (so it appears right after prompt header)
     if report:
@@ -437,7 +502,19 @@ def _run_edit(args, prof, report=None):
     )
     prof.stop("edit")
     if report:
-        report.stop_phase("edit", prof.get_elapsed("edit") or 0.0, prof._get_rss_gib())
+        edit_rss = prof.get_max_phase_rss(
+            "edit",
+            "text_encode",
+            "text_encoder_unload",
+            "dit_step_",
+            "edit_step_",
+            "vae_decode",
+        ) or prof.get_phase_rss("edit")
+        report.stop_phase(
+            "edit",
+            prof.get_elapsed("edit") or 0.0,
+            edit_rss,
+        )
 
     # Also set metadata on profiler for JSON/markdown output
     if prof.enabled:
@@ -454,7 +531,12 @@ def _run_edit(args, prof, report=None):
     image.save(args.output)
     prof.stop("save_png")
     if report:
-        report.stop_phase("save_png", prof.get_elapsed("save_png") or 0.0, prof._get_rss_gib(), saved_file=args.output)
+        report.stop_phase(
+            "save_png",
+            prof.get_elapsed("save_png") or 0.0,
+            prof.get_phase_rss("save_png"),
+            saved_file=args.output,
+        )
 
 
 def _benchmark_cleanup(args, prof):

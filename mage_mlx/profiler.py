@@ -51,36 +51,93 @@ class Profiler:
     track_memory: bool = True
     _records: list[PhaseRecord] = field(default_factory=list)
     _timers: dict[str, list[float]] = field(default_factory=dict)
+    _peak_rss_gib: Optional[float] = None  # max RSS observed across all samples
     on_phase_complete: Optional[callable] = None  # callback(name, elapsed, peak_rss)
 
     # ------------------------------------------------------------------
     # Memory helpers
     # ------------------------------------------------------------------
     @staticmethod
-    def _get_rss_gib() -> Optional[float]:
-        """Return current process RSS in GiB, or None if unavailable.
-
-        Note: ru_maxrss is the peak RSS for the entire process lifetime —
-        it never decreases. All phases after the peak will show the same
-        value.
-        """
+    def _get_process_rss_gib() -> Optional[float]:
+        """Return current process RSS in GiB via `ps` (KB on macOS)."""
         try:
-            import platform
-            import resource
+            import subprocess
 
-            # ru_maxrss is in bytes on macOS, kilobytes on Linux.
-            # Detect by platform rather than magnitude, since a 5 GB process
-            # on macOS (~5e9 bytes) would be misread as ~4768 GiB if treated
-            # as KB.
-            rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-            if rss > 0:
-                if platform.system() == "Darwin":
-                    return rss / (1024 ** 3)  # bytes → GiB
-                else:
-                    return rss / (1024 ** 2)  # KB → GiB
+            result = subprocess.run(
+                ["ps", "-o", "rss=", "-p", str(os.getpid())],
+                capture_output=True, text=True, timeout=2
+            )
+            if result.returncode == 0:
+                rss_kb = int(result.stdout.strip())
+                return rss_kb / (1024 ** 2)  # KB → GiB
         except Exception:
             pass
         return None
+
+    @staticmethod
+    def _get_mlx_memory_gib() -> Optional[float]:
+        """Return MLX active device memory in GiB.
+
+        After Qwen unload, process RSS can drop sharply while DiT/VAE weights
+        remain in Metal memory. Use active memory only (not cache) so values
+        stay comparable to worker-mode generation peaks.
+        """
+        try:
+            import mlx.core as mx
+
+            return float(mx.get_active_memory()) / (1024 ** 3)
+        except Exception:
+            return None
+
+    @classmethod
+    def _get_rss_gib(cls) -> Optional[float]:
+        """Return best-effort current memory usage in GiB.
+
+        Takes the max of process RSS and MLX device memory so values stay
+        meaningful both during model load (high RSS) and after text-encoder
+        unload (weights mostly in Metal, low process RSS).
+        """
+        samples = [
+            s for s in (cls._get_process_rss_gib(), cls._get_mlx_memory_gib())
+            if s is not None
+        ]
+        return max(samples) if samples else None
+
+    def _sample_rss_gib(self) -> Optional[float]:
+        """Sample current memory and update the run-level peak."""
+        rss = self._get_rss_gib()
+        if rss is not None:
+            if self._peak_rss_gib is None or rss > self._peak_rss_gib:
+                self._peak_rss_gib = rss
+        return rss
+
+    def get_peak_rss_gib(self) -> Optional[float]:
+        """Return the highest memory observed during this profiling run."""
+        return self._peak_rss_gib
+
+    def get_phase_rss(self, name: str) -> Optional[float]:
+        """Return memory recorded when a named phase stopped (last match)."""
+        for rec in reversed(self._records):
+            if rec.name == name:
+                return rec.peak_rss_gib
+        return None
+
+    def get_max_phase_rss(self, *names: str) -> Optional[float]:
+        """Return max memory among phases whose names equal or start with ``names``.
+
+        Example::
+            get_max_phase_rss("generation", "text_encode", "dit_step_", "vae_decode")
+        """
+        best: Optional[float] = None
+        for rec in self._records:
+            if rec.peak_rss_gib is None:
+                continue
+            for name in names:
+                if rec.name == name or rec.name.startswith(name):
+                    if best is None or rec.peak_rss_gib > best:
+                        best = rec.peak_rss_gib
+                    break
+        return best
 
     # ------------------------------------------------------------------
     # Timing API
@@ -113,7 +170,7 @@ class Profiler:
         if not timers:
             del self._timers[name]
         elapsed = time.perf_counter() - start
-        rss = self._get_rss_gib() if self.track_memory else None
+        rss = self._sample_rss_gib() if self.track_memory else None
         self._records.append(PhaseRecord(name=name, elapsed=elapsed, peak_rss_gib=rss))
         # Real-time callback (e.g. LiveReport.start_phase/stop_phase)
         if self.on_phase_complete is not None:

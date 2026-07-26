@@ -252,6 +252,7 @@ class MageFlowPipeline:
                     transformer, actual_quantize
                 )
                 transformer.load_weights(quantized_path, strict=True)
+                mx.eval(transformer.parameters())
                 if profiler:
                     profiler.stop("dit_load")
             else:
@@ -260,6 +261,7 @@ class MageFlowPipeline:
                 weights = mx.load(dit_weights_path)
                 transformer.load_weights(list(weights.items()), strict=False)
                 del weights
+                mx.eval(transformer.parameters())
                 print(f"  Quantizing DiT to {actual_quantize}-bit...")
                 quantized_layers = _quantize_transformer(
                     transformer, actual_quantize
@@ -281,6 +283,7 @@ class MageFlowPipeline:
                 profiler.start("dit_load")
             weights = mx.load(dit_weights_path)
             transformer.load_weights(list(weights.items()), strict=False)
+            mx.eval(transformer.parameters())
             if profiler:
                 profiler.stop("dit_load")
 
@@ -289,6 +292,7 @@ class MageFlowPipeline:
             profiler.start("vae_load")
         vae_weights_path = os.path.join(model_dir, "vae.safetensors")
         vae = MageVAE(vae_weights_path, sample_posterior=True)
+        mx.eval(vae.parameters())
         if profiler:
             profiler.stop("vae_load")
             profiler.set_metadata("vae_load", "tensors", str(getattr(vae, "num_tensors", 0)))
@@ -305,9 +309,13 @@ class MageFlowPipeline:
             profiler.set_metadata("text_encoder_load", "tensors", str(getattr(text_encoder, "num_tensors", 0)))
 
         # Load tokenizer for text encoding
+        if profiler:
+            profiler.start("tokenizer_load")
         from transformers import AutoTokenizer
         raw_tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-VL-8B-Instruct")
         tokenizer = MageFlowTokenizer(raw_tokenizer)
+        if profiler:
+            profiler.stop("tokenizer_load")
 
         return cls(transformer, vae, text_encoder, tokenizer=tokenizer, num_steps=num_steps)
 
