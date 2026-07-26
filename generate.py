@@ -8,17 +8,67 @@ Usage:
     python generate.py --prompt "..." --output output.png
     python generate.py --prompt "..." --model microsoft/Mage-Flow-Turbo
     python generate.py --prompt "..." --quantize 4
-    python generate.py --prompt "..." --profile
-    python generate.py --worker prompts.jsonl --profile
+    python generate.py --prompt "..." --metadata
+    python generate.py --worker prompts.jsonl --metadata
     python generate.py --benchmark-cleanup --prompt "test"
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import traceback
+from datetime import datetime
+from typing import Optional
+
+
+def _get_model_name(model_dir: str) -> str:
+    """Convert model directory path to HuggingFace model name.
+
+    e.g. 'models/microsoft_Mage-Flow-Turbo' -> 'microsoft/Mage-Flow-Turbo'
+    e.g. 'microsoft/Mage-Flow-Turbo' -> 'microsoft/Mage-Flow-Turbo'
+    """
+    basename = os.path.basename(model_dir.rstrip("/"))
+    return basename.replace("_", "/")
+
+
+def _get_base_model(model_dir: str) -> str:
+    """Read base_model from transformer_config.json, fallback to model_dir."""
+    config_path = os.path.join(model_dir, "transformer_config.json")
+    if os.path.exists(config_path):
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+            return config.get("_class_name", model_dir)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return model_dir
+
+
+def _collect_metadata(
+    model: str,
+    image_path: Optional[str],
+    image_paths: Optional[list[str]],
+    generation_time: Optional[float],
+    peak_memory_gib: Optional[float],
+) -> dict:
+    """Collect run-level metadata for a generation run.
+
+    Note: prompt, negative_prompt, and quantize are per-prompt values that
+    appear in the profile table metadata, not in this run-level metadata dict.
+    """
+    return {
+        "model": _get_model_name(model),
+        "base_model": _get_base_model(model),
+        "generation_time_seconds": generation_time,
+        "created_at": datetime.now().isoformat(),
+        "image_path": image_path,
+        "image_paths": image_paths,
+        "image_strength": None,
+        "peak_memory_gib": peak_memory_gib,
+    }
 
 
 def main():
@@ -66,8 +116,8 @@ def main():
         help="Quantize supported DiT layers to 4 or 8 bits in memory"
     )
     parser.add_argument(
-        "--profile", action="store_true",
-        help="Enable phase-level timing and memory profiling"
+        "--metadata", action="store_true",
+        help="Enable phase-level profiling, print terminal report, and save JSON + markdown files"
     )
     parser.add_argument(
         "--worker", type=str, default=None, metavar="JSONL",
@@ -125,7 +175,7 @@ def main():
     # --- Phase: Python/import startup ---
     from mage_mlx.profiler import Profiler
 
-    prof = Profiler(enabled=args.profile, track_memory=args.profile)
+    prof = Profiler(enabled=args.metadata, track_memory=args.metadata)
 
     prof.start("total_wall_clock")
     prof.start("python_startup")
@@ -159,17 +209,22 @@ def main():
             "negative_prompt": args.negative_prompt,
             "quantize": args.quantize,
         }
-        run_worker(args.worker, defaults, profiler=prof)
+        metadata = run_worker(
+            args.worker,
+            defaults,
+            profiler=prof,
+            metadata_enabled=args.metadata,
+        )
         prof.stop("total_wall_clock")
-        if args.profile:
-            prof.print_report()
+        if args.metadata:
+            prof.print_report(metadata=metadata)
         return
 
     # --- Benchmark cleanup mode ---
     if args.benchmark_cleanup:
         _benchmark_cleanup(args, prof)
         prof.stop("total_wall_clock")
-        if args.profile:
+        if args.metadata:
             prof.print_report()
         return
 
@@ -177,8 +232,23 @@ def main():
     if args.image is not None:
         _run_edit(args, prof)
         prof.stop("total_wall_clock")
-        if args.profile:
-            prof.print_report()
+        if args.metadata:
+            # For edit: image_path = target image, image_paths = reference images
+            if args.ref_images is None:
+                ref_paths = [args.image]
+            else:
+                ref_paths = [p.strip() for p in args.ref_images.split(",") if p.strip()]
+            metadata = _collect_metadata(
+                model=args.model,
+                image_path=args.image,
+                image_paths=ref_paths if len(ref_paths) > 1 else None,
+                generation_time=prof.get_elapsed("total_wall_clock"),
+                peak_memory_gib=prof._get_rss_gib(),
+            )
+            prof.print_report(metadata=metadata)
+            base_path = os.path.splitext(args.output)[0]
+            prof.save_metadata(base_path, metadata)
+            print(f"  Metadata saved to {base_path}.json and {base_path}.md")
         return
 
     # --- Phase: Pipeline load (DiT + VAE + text encoder) ---
@@ -215,6 +285,13 @@ def main():
     )
     prof.stop("generation")
 
+    # Add per-prompt metadata to the generation phase (ordered: prompt, resolution, steps, quantize)
+    if args.metadata:
+        prof.set_metadata("generation", "prompt", args.prompt)
+        prof.set_metadata("generation", "resolution", f"{args.width}x{args.height}")
+        prof.set_metadata("generation", "steps", str(args.steps))
+        prof.set_metadata("generation", "quantize", str(args.quantize))
+
     # --- Phase: Save ---
     prof.start("save_png")
     image.save(args.output)
@@ -224,9 +301,20 @@ def main():
 
     prof.stop("total_wall_clock")
 
-    # --- Report ---
-    if args.profile:
-        prof.print_report()
+    # --- Report + Metadata ---
+    if args.metadata:
+        # For txt2img: image_path = null, image_paths = null (only applies to edit)
+        metadata = _collect_metadata(
+            model=args.model,
+            image_path=None,
+            image_paths=None,
+            generation_time=prof.get_elapsed("total_wall_clock"),
+            peak_memory_gib=prof._get_rss_gib(),
+        )
+        prof.print_report(metadata=metadata)
+        base_path = os.path.splitext(args.output)[0]
+        prof.save_metadata(base_path, metadata)
+        print(f"  Metadata saved to {base_path}.json and {base_path}.md")
 
 
 def _run_edit(args, prof):
@@ -276,6 +364,13 @@ def _run_edit(args, prof):
         renormalization=args.renormalization,
     )
     prof.stop("edit")
+
+    # Add per-prompt metadata to the edit phase (ordered: prompt, resolution, steps, quantize)
+    if prof.enabled:
+        prof.set_metadata("edit", "prompt", args.prompt)
+        prof.set_metadata("edit", "resolution", f"{args.width}x{args.height}")
+        prof.set_metadata("edit", "steps", str(args.steps))
+        prof.set_metadata("edit", "quantize", str(args.quantize))
 
     # Extract PIL image from GeneratedImage
     image = generated.image
@@ -370,7 +465,7 @@ def _benchmark_cleanup(args, prof):
     for name in results:
         print(f"    - {name}")
     print()
-    print("  Use --profile to see detailed phase timings for each strategy.")
+    print("  Use --metadata to see detailed phase timings for each strategy.")
 
 
 if __name__ == "__main__":

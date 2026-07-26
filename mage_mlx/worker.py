@@ -10,7 +10,7 @@ generated using cached embeddings. This amortizes the ~8 GB Qwen load
 across the entire batch instead of paying it per-prompt.
 
 Usage:
-    .venv/bin/python generate.py --worker prompts.jsonl --profile
+    .venv/bin/python generate.py --worker prompts.jsonl --metadata
 
 JSONL format (one JSON object per line):
     {"prompt": "A cat", "seed": 42, "output": "cat.png"}
@@ -27,6 +27,7 @@ from __future__ import annotations
 import gc
 import json
 import os
+from datetime import datetime
 from typing import Any, Optional
 
 import mlx.core as mx
@@ -45,6 +46,29 @@ VALID_PARAMS = {
     "prompt", "negative_prompt", "seed", "guidance",
     "width", "height", "output", "steps", "model", "quantize",
 }
+
+
+def _get_model_name(model_dir: str) -> str:
+    """Convert model directory path to HuggingFace model name.
+
+    e.g. 'models/microsoft_Mage-Flow-Turbo' -> 'microsoft/Mage-Flow-Turbo'
+    e.g. 'microsoft/Mage-Flow-Turbo' -> 'microsoft/Mage-Flow-Turbo'
+    """
+    basename = os.path.basename(model_dir.rstrip("/"))
+    return basename.replace("_", "/")
+
+
+def _get_base_model(model_dir: str) -> str:
+    """Read base_model from transformer_config.json, fallback to model_dir."""
+    config_path = os.path.join(model_dir, "transformer_config.json")
+    if os.path.exists(config_path):
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+            return config.get("_class_name", model_dir)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return model_dir
 
 
 def load_prompts(jsonl_path: str) -> list[dict[str, Any]]:
@@ -137,7 +161,8 @@ def run_worker(
     jsonl_path: str,
     defaults: dict[str, Any],
     profiler: Optional[Profiler] = None,
-) -> None:
+    metadata_enabled: bool = False,
+) -> Optional[dict]:
     """Run the persistent JSONL worker in prompt queue mode.
 
     Phase 1: Load pipeline (DiT + VAE resident). Load Qwen once, encode all
@@ -148,6 +173,10 @@ def run_worker(
         jsonl_path: Path to the JSONL prompts file
         defaults: Default parameters from CLI
         profiler: Optional Profiler instance
+        metadata_enabled: If True, save JSON + markdown metadata files
+
+    Returns:
+        Metadata dict if metadata_enabled, else None.
     """
     from mage_mlx import MageFlowPipeline
     from mage_mlx.embedding_cache import EmbeddingCache
@@ -156,7 +185,7 @@ def run_worker(
     prompts = load_prompts(jsonl_path)
     if not prompts:
         print("No valid prompts found in JSONL file.")
-        return
+        return None
 
     print(f"Loaded {len(prompts)} prompts from {jsonl_path}")
 
@@ -270,6 +299,9 @@ def run_worker(
     print("Phase 2: Generating images (DiT + VAE)")
     print(f"{'=' * 60}")
 
+    # Collect per-prompt metadata for JSON output
+    prompt_metadata: list[dict[str, Any]] = []
+
     for i, prompt_cfg in enumerate(prompts):
         params = merge_params(defaults, prompt_cfg)
 
@@ -277,8 +309,32 @@ def run_worker(
         print(f"Prompt {i + 1}/{len(prompts)}")
         print(f"{'=' * 60}")
 
-        # Check if scheduler reset is needed
+        # Check if pipeline reload or scheduler reset is needed
         needs_pipeline, needs_scheduler = needs_reload(current_params, params)
+
+        # Handle pipeline reload (model/quantize change)
+        if needs_pipeline:
+            if profiler:
+                profiler.start(f"pipeline_reload_{i + 1}")
+            pipeline = MageFlowPipeline.from_pretrained(
+                model_dir=params["model"],
+                num_steps=params.get("steps", 4),
+                quantize=params.get("quantize"),
+                profiler=profiler,
+            )
+            # Unload text encoder from new pipeline (we use cached embeddings)
+            if profiler:
+                profiler.start(f"text_encoder_unload_{i + 1}")
+            pipeline.text_encoder.unload()
+            gc.collect()
+            mx.clear_cache()
+            if profiler:
+                profiler.stop(f"text_encoder_unload_{i + 1}")
+            current_params = dict(params)
+            if profiler:
+                profiler.stop(f"pipeline_reload_{i + 1}")
+
+        # Handle scheduler reset (steps change)
         if needs_scheduler:
             print(f"  Resetting scheduler (steps={params['steps']})...")
             pipeline.scheduler.set_timesteps(params["steps"])
@@ -299,6 +355,12 @@ def run_worker(
 
         if profiler:
             profiler.stop(f"generation_{i + 1}")
+            # Ordered: prompt, resolution, steps, quantize
+            profiler.set_metadata(
+                f"generation_{i + 1}",
+                "prompt",
+                params["prompt"],
+            )
             profiler.set_metadata(
                 f"generation_{i + 1}",
                 "resolution",
@@ -309,6 +371,11 @@ def run_worker(
                 "steps",
                 str(params["steps"]),
             )
+            profiler.set_metadata(
+                f"generation_{i + 1}",
+                "quantize",
+                str(params.get("quantize")),
+            )
 
         # Save image
         if profiler:
@@ -317,6 +384,40 @@ def run_worker(
         if profiler:
             profiler.stop(f"save_{i + 1}")
         print(f"  Saved to {params['output']}")
+
+        # Collect per-prompt metadata
+        prompt_metadata.append({
+            "prompt": params["prompt"],
+            "negative_prompt": params.get("negative_prompt"),
+            "quantize": params.get("quantize"),
+            "resolution": f"{params['width']}x{params['height']}",
+            "steps": params["steps"],
+            "generation_time_seconds": profiler.get_elapsed(f"generation_{i + 1}") if profiler else None,
+            "image_path": params["output"],
+        })
+
+    # --- Stop total_wall_clock before saving metadata ---
+    if profiler:
+        profiler.stop("total_wall_clock")
+
+    # --- Save metadata files ---
+    if metadata_enabled and profiler:
+        metadata = {
+            "model": _get_model_name(defaults["model"]),
+            "base_model": _get_base_model(defaults["model"]),
+            "generation_time_seconds": profiler.get_elapsed("total_wall_clock"),
+            "created_at": datetime.now().isoformat(),
+            "image_path": None,
+            "image_paths": None,
+            "image_strength": None,
+            "peak_memory_gib": profiler._get_rss_gib(),
+        }
+        base_path = os.path.splitext(jsonl_path)[0]
+        profiler.save_metadata(base_path, metadata, prompts=prompt_metadata)
+        print(f"\n  Metadata saved to {base_path}.json and {base_path}.md")
+        return metadata
+
+    return None
 
 
 def _generate_with_cached_embeds(
