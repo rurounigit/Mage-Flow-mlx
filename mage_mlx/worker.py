@@ -368,6 +368,7 @@ def run_worker(
             report.add_metadata(f"generation_{i + 1}", "resolution", f"{params['width']}x{params['height']}")
             report.add_metadata(f"generation_{i + 1}", "steps", str(params["steps"]))
             report.add_metadata(f"generation_{i + 1}", "quantize", str(params.get("quantize")))
+            print()  # Empty line after metadata, before generation steps
 
         if profiler:
             profiler.start(f"generation_{i + 1}")

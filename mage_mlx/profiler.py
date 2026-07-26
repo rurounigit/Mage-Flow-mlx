@@ -486,7 +486,26 @@ class LiveReport:
         time_str = _fmt_time(elapsed) if elapsed is not None else f"{_C.GRAY}—{_C.RESET}"
         ram_str = _colorize_ram(peak_rss_gib) if peak_rss_gib is not None else f"{_C.GRAY}—{_C.RESET}"
 
-        print()  # newline after the ▸ indicator
+        # Print empty line before phase for visual separation
+        # Block phases form a group with no empty lines between them:
+        # - Pipeline loading phases: dit_load, vae_load, text_encoder_load
+        # - Generation steps: text_encode, dit_step_N, edit_step_N, vae_decode
+        _BLOCK_PHASES = {"dit_load", "vae_load", "text_encoder_load", "text_encode", "vae_decode"}
+        def _is_block(name):
+            return name in _BLOCK_PHASES or name.startswith("dit_step_") or name.startswith("edit_step_")
+        
+        is_block_phase = _is_block(name)
+        prev = self.phases[-1] if self.phases else None
+        prev_was_block = prev and prev.elapsed is not None and _is_block(prev.name)
+
+        if is_block_phase:
+            # Empty line before first block phase (if previous was not a block phase)
+            if not prev_was_block:
+                print()
+        else:
+            # Empty line before non-block phases (always, gives separation after blocks)
+            print()
+
         print(f"  {name:<42} {time_str:>8}   {ram_str:>10}", end="")
         if saved_file:
             print(f"   {_C.GREEN}→ {saved_file}{_C.RESET}")

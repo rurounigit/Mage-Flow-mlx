@@ -309,12 +309,14 @@ def main():
         report.stop_phase("pipeline_load", prof.get_elapsed("pipeline_load") or 0.0, prof._get_rss_gib())
 
     # --- Phase: Generation ---
-    # Set metadata BEFORE generation starts (so it appears right after prompt header)
+    # Print prompt header BEFORE generation starts (so it appears right before metadata)
     if report:
+        report.prompt_header(1, 1)
         report.add_metadata("generation", "prompt", args.prompt)
         report.add_metadata("generation", "resolution", f"{args.width}x{args.height}")
         report.add_metadata("generation", "steps", str(args.steps))
         report.add_metadata("generation", "quantize", str(args.quantize))
+        print()  # Empty line after metadata, before generation steps
 
     prof.start("generation")
     image = pipeline.generate(
@@ -416,6 +418,7 @@ def _run_edit(args, prof, report=None):
         report.add_metadata("edit", "resolution", f"{args.width}x{args.height}")
         report.add_metadata("edit", "steps", str(args.steps))
         report.add_metadata("edit", "quantize", str(args.quantize))
+        print()  # Empty line after metadata, before generation steps
 
     prof.start("edit")
     generated = edit.generate_image(
