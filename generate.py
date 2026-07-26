@@ -452,7 +452,6 @@ def _run_edit(args, prof, report=None):
     if args.ref_images is None:
         # Use the target image as its own reference (mflux --image-paths semantics)
         ref_paths = [args.image]
-        print("  No --ref-images provided; using target image as reference")
     else:
         ref_paths = [p.strip() for p in args.ref_images.split(",") if p.strip()]
         if not ref_paths:
@@ -478,6 +477,7 @@ def _run_edit(args, prof, report=None):
             prof.get_elapsed("pipeline_load") or 0.0,
             prof.get_phase_rss("pipeline_load"),
         )
+        print()  # Empty line after pipeline_load phase
 
     # Set metadata BEFORE edit starts (so it appears right after prompt header)
     if report:

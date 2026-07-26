@@ -2,8 +2,8 @@
   "metadata": {
     "model": "Mage-Flow-Edit-Turbo",
     "base_model": "microsoft/Mage-Flow-Edit-Turbo",
-    "generation_time_seconds": 54.03205737506505,
-    "created_at": "2026-07-26T22:45:11.389739",
+    "generation_time_seconds": 52.69775204209145,
+    "created_at": "2026-07-26T23:20:57.408630",
     "image_path": "test_10_shoe.png",
     "image_paths": null,
     "image_strength": null,
@@ -12,49 +12,49 @@
   "phases": [
     {
       "name": "python_startup",
-      "elapsed": 2.2666994482278824e-05,
-      "peak_rss_gib": 0.215850830078125,
+      "elapsed": 2.150004729628563e-05,
+      "peak_rss_gib": 0.2159423828125,
       "metadata": {}
     },
     {
       "name": "pipeline_load",
-      "elapsed": 4.443871708004735,
+      "elapsed": 4.607905416050926,
       "peak_rss_gib": 16.120695484802127,
       "metadata": {}
     },
     {
       "name": "edit_step_1",
-      "elapsed": 9.676079291966744,
+      "elapsed": 9.226957833976485,
       "peak_rss_gib": 16.137024026364088,
       "metadata": {}
     },
     {
       "name": "edit_step_2",
-      "elapsed": 6.51064704102464,
+      "elapsed": 6.76365420804359,
       "peak_rss_gib": 16.137024026364088,
       "metadata": {}
     },
     {
       "name": "edit_step_3",
-      "elapsed": 6.352714792010374,
+      "elapsed": 6.587767958058976,
       "peak_rss_gib": 16.137024026364088,
       "metadata": {}
     },
     {
       "name": "edit_step_4",
-      "elapsed": 6.524384667049162,
+      "elapsed": 6.612136207986623,
       "peak_rss_gib": 16.137024026364088,
       "metadata": {}
     },
     {
       "name": "vae_decode",
-      "elapsed": 0.5043421250302345,
+      "elapsed": 0.37048149993643165,
       "peak_rss_gib": 16.131210384890437,
       "metadata": {}
     },
     {
       "name": "edit",
-      "elapsed": 48.87378904200159,
+      "elapsed": 47.36519937496632,
       "peak_rss_gib": 16.122421322390437,
       "metadata": {
         "prompt": "change the shoe to deep burgundy polished leather with a translucent smoke-gray sole and subtle chrome details. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
@@ -65,16 +65,16 @@
     },
     {
       "name": "save_png",
-      "elapsed": 0.058837541029788554,
+      "elapsed": 0.06190145795699209,
       "peak_rss_gib": 16.122421322390437,
       "metadata": {}
     },
     {
       "name": "total_wall_clock",
-      "elapsed": 54.03205737506505,
-      "peak_rss_gib": 0.304168701171875,
+      "elapsed": 52.69775204209145,
+      "peak_rss_gib": 0.3272552490234375,
       "metadata": {}
     }
   ],
-  "total_wall_clock": 54.03205737506505
+  "total_wall_clock": 52.69775204209145
 }

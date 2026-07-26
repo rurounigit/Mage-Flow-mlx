@@ -549,7 +549,7 @@ class LiveReport:
         # Block phases form a group with no empty lines between them:
         # - Pipeline loading phases: dit_load, vae_load, text_encoder_load
         # - Generation steps: text_encode, dit_step_N, edit_step_N, vae_decode
-        _BLOCK_PHASES = {"dit_load", "vae_load", "text_encoder_load", "text_encode", "vae_decode"}
+        _BLOCK_PHASES = {"dit_load", "vae_load", "text_encoder_load", "text_encode"}
         def _is_block(name):
             return name in _BLOCK_PHASES or name.startswith("dit_step_") or name.startswith("edit_step_")
 

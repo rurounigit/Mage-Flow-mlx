@@ -445,6 +445,7 @@ class MageFlowPipeline:
         if profiler:
             profiler.start("vae_decode")
         images = self.vae.decode(latents)  # [1, H, W, 3] in [-1, 1]
+        mx.eval(images)
         if profiler:
             profiler.stop("vae_decode")
 
@@ -541,6 +542,7 @@ class MageFlowPipeline:
         if profiler:
             profiler.start("vae_decode")
         images = self.vae.decode(latents)  # [1, H, W, 3] in [-1, 1]
+        mx.eval(images)
         if profiler:
             profiler.stop("vae_decode")
 
