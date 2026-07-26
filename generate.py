@@ -181,7 +181,7 @@ def main():
     prof.start("python_startup")
 
     # Load pipeline (auto-downloads and converts weights if needed)
-    print(f"Loading Mage-Flow MLX pipeline from {args.model}...")
+    print(f"Importing Mage-Flow MLX pipeline from {args.model}...")
     print(f"  Current working directory: {os.getcwd()}")
     print(f"  Python executable: {sys.executable}")
 
