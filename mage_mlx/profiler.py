@@ -466,10 +466,6 @@ class LiveReport:
         saved_file: Optional[str] = None,
     ) -> None:
         """Called when a phase completes — prints timing + RAM."""
-        # Skip if already reported (e.g. via on_phase_complete callback)
-        for r in self.phases:
-            if r.name == name and r.elapsed is not None:
-                return
         row = None
         for r in reversed(self.phases):
             if r.name == name and r.elapsed is None:

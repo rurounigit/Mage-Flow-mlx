@@ -228,9 +228,6 @@ def run_worker(
         profiler.stop("pipeline_reload")
     if report:
         report.stop_phase("pipeline_reload", profiler.get_elapsed("pipeline_reload") or 0.0, profiler._get_rss_gib())
-        # Report sub-phases (dit_load, vae_load, text_encoder_load) that were
-        # tracked by the profiler during from_pretrained
-        report.report_profiler_phases(profiler)
 
     # --- Phase 1: Pre-encode all prompts (load Qwen once, encode all, unload) ---
     print(f"\n{'=' * 60}")
@@ -392,9 +389,6 @@ def run_worker(
             profiler.set_metadata(f"generation_{i + 1}", "steps", str(params["steps"]))
             profiler.set_metadata(f"generation_{i + 1}", "quantize", str(params.get("quantize")))
         if report:
-            # Report sub-phases (dit_step_N, vae_decode) tracked during generation
-            # BEFORE the generation_1 row so they appear in order
-            report.report_profiler_phases(profiler, exclude=f"generation_{i + 1}")
             report.stop_phase(f"generation_{i + 1}", profiler.get_elapsed(f"generation_{i + 1}") or 0.0, profiler._get_rss_gib())
 
         # Save image

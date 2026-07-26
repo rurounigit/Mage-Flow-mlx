@@ -181,9 +181,12 @@ def main():
     if args.metadata:
         report = LiveReport(title="Mage-Flow MLX")
         # Real-time callback: report sub-phases as they complete
-        _EXPLICIT_PREFIXES = ("pipeline_reload", "text_encoder_unload", "text_encode_", "generation_", "save_", "total_wall_clock", "python_startup", "edit")
+        # Phases that are explicitly reported via stop_phase (skip in callback)
+        # Use exact names for numbered phases, prefixes for generic ones
+        _EXPLICIT_EXACT = {"total_wall_clock", "python_startup", "edit", "pipeline_load"}
+        _EXPLICIT_PREFIXES = ("pipeline_reload", "text_encoder_unload", "text_encode_", "generation_", "save_")
         def _on_phase_complete(name, elapsed, rss):
-            if any(name.startswith(p) for p in _EXPLICIT_PREFIXES):
+            if name in _EXPLICIT_EXACT or any(name.startswith(p) for p in _EXPLICIT_PREFIXES):
                 return  # handled explicitly via stop_phase
             report.stop_phase(name, elapsed or 0.0, rss)
         prof.on_phase_complete = _on_phase_complete
@@ -304,8 +307,6 @@ def main():
     prof.stop("pipeline_load")
     if report:
         report.stop_phase("pipeline_load", prof.get_elapsed("pipeline_load") or 0.0, prof._get_rss_gib())
-        # Report sub-phases (dit_load, vae_load, text_encoder_load)
-        report.report_profiler_phases(prof)
 
     # --- Phase: Generation ---
     # Set metadata BEFORE generation starts (so it appears right after prompt header)
@@ -327,9 +328,6 @@ def main():
     )
     prof.stop("generation")
     if report:
-        # Report sub-phases (text_encode, dit_step_N, vae_decode, etc.)
-        # BEFORE the generation row so they appear in order
-        report.report_profiler_phases(prof, exclude="generation")
         report.stop_phase("generation", prof.get_elapsed("generation") or 0.0, prof._get_rss_gib())
 
     # Also set metadata on profiler for JSON/markdown output
@@ -430,6 +428,7 @@ def _run_edit(args, prof, report=None):
         guidance=args.guidance,
         negative_prompt=args.negative_prompt,
         renormalization=args.renormalization,
+        profiler=prof,
     )
     prof.stop("edit")
     if report:
