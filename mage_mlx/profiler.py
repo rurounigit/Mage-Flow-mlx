@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import textwrap
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -493,7 +495,7 @@ class LiveReport:
         _BLOCK_PHASES = {"dit_load", "vae_load", "text_encoder_load", "text_encode", "vae_decode"}
         def _is_block(name):
             return name in _BLOCK_PHASES or name.startswith("dit_step_") or name.startswith("edit_step_")
-        
+
         is_block_phase = _is_block(name)
         prev = self.phases[-1] if self.phases else None
         prev_was_block = prev and prev.elapsed is not None and _is_block(prev.name)
@@ -552,7 +554,32 @@ class LiveReport:
             row = _PhaseRow(name=phase_name)
             self.phases.append(row)
         row.metadata[key] = value
-        print(f"  {_C.YELLOW}{key}{_C.RESET}:{value}")
+
+        # Build the prefix: "  key:" with ANSI color codes
+        prefix = f"  {_C.YELLOW}{key}{_C.RESET}:"
+        # Visible prefix length (without ANSI codes) for indentation
+        visible_prefix = f"  {key}:"
+        indent_len = len(visible_prefix)
+
+        # Get terminal width, fall back to 80 if unavailable
+        try:
+            term_width = shutil.get_terminal_size().columns
+        except Exception:
+            term_width = 80
+
+        # Wrap the value to fit within the terminal width
+        wrap_width = max(20, term_width - indent_len)
+        wrapped_lines = textwrap.wrap(value, width=wrap_width)
+
+        if wrapped_lines:
+            # First line with the prefix
+            print(f"{prefix}{wrapped_lines[0]}")
+            # Subsequent lines indented to match the prefix
+            for line in wrapped_lines[1:]:
+                print(f"{' ' * indent_len}{line}")
+        else:
+            # Empty value
+            print(prefix)
 
     # ── prompt header ──
     def prompt_header(self, index: int, total: int) -> None:

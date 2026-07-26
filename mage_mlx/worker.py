@@ -247,7 +247,6 @@ def run_worker(
         cached_embeds = cache.get(cache_key)
 
         if cached_embeds is not None:
-            print(f"  Prompt {i + 1}/{len(prompts)}: Cache HIT — skipping Qwen encode")
             # Still need to encode negative prompt if guidance > 1.0
             neg_embeds = None
             if params.get("guidance", 1.0) > 1.0:
@@ -266,8 +265,8 @@ def run_worker(
                         report.stop_phase(f"text_encode_neg_{i + 1}", profiler.get_elapsed(f"text_encode_neg_{i + 1}") or 0.0, profiler._get_rss_gib())
                         report.add_metadata(f"text_encode_neg_{i + 1}", "cache", "HIT")
             prompt_embeds[i] = (cached_embeds, neg_embeds)
+            print(f"  Prompt {i + 1}/{len(prompts)}: Cache HIT — skipping Qwen encode")
         else:
-            print(f"  Prompt {i + 1}/{len(prompts)}: Cache MISS — encoding with Qwen")
             if profiler:
                 profiler.start(f"text_encode_{i + 1}")
 
@@ -300,6 +299,7 @@ def run_worker(
                 if report:
                     report.stop_phase(f"text_encode_{i + 1}", profiler.get_elapsed(f"text_encode_{i + 1}") or 0.0, profiler._get_rss_gib())
                     report.add_metadata(f"text_encode_{i + 1}", "cache", "MISS")
+            print(f"  Prompt {i + 1}/{len(prompts)}: Cache MISS — encoding with Qwen")
 
     # Unload Qwen once after all prompts are encoded
     if profiler:
@@ -452,7 +452,6 @@ def run_worker(
         }
         base_path = os.path.splitext(jsonl_path)[0]
         profiler.save_metadata(base_path, metadata, prompts=prompt_metadata)
-        print(f"\n  Metadata saved to {base_path}.json and {base_path}.md")
         return metadata, prompt_metadata
 
     return None, None

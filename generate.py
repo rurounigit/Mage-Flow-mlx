@@ -242,6 +242,8 @@ def main():
                 peak_ram=prof._get_rss_gib() or 0.0,
             )
             report.print_run_metadata(metadata)
+            base_path = os.path.splitext(args.worker)[0]
+            print(f"\n  Metadata saved to {base_path}.json and {base_path}.md")
         return
 
     # --- Benchmark cleanup mode ---
