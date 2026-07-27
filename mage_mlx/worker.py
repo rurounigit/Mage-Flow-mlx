@@ -209,7 +209,10 @@ def run_worker(
         def _on_phase_complete(name, elapsed, rss):
             if name in _EXPLICIT_EXACT or any(name.startswith(p) for p in _EXPLICIT_PREFIXES):
                 return  # handled explicitly via stop_phase
-            report.stop_phase(name, elapsed or 0.0, rss)
+            # text_encoder_load is lazy — weights load during text_encode,
+            # so the phase time is always ~0.0s. Show "lazy loading" instead.
+            loading_mode = "lazy loading" if name == "text_encoder_load" else None
+            report.stop_phase(name, elapsed or 0.0, rss, loading_mode=loading_mode)
         profiler.on_phase_complete = _on_phase_complete
 
     # Initialize cache

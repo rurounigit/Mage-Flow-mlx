@@ -2,93 +2,93 @@
   "metadata": {
     "model": "microsoft/Mage-Flow-Turbo",
     "base_model": "MageFlow",
-    "generation_time_seconds": 29.39754858298693,
-    "created_at": "2026-07-27T16:52:37.294671",
+    "generation_time_seconds": 30.175262999953702,
+    "created_at": "2026-07-27T17:05:18.178081",
     "image_path": null,
     "image_paths": null,
     "image_strength": null,
-    "peak_memory_gib": 8.160751342773438
+    "peak_memory_gib": 8.187469482421875
   },
   "phases": [
     {
       "name": "python_startup",
-      "elapsed": 1.9832979887723923e-05,
-      "peak_rss_gib": 0.215972900390625,
+      "elapsed": 1.9875005818903446e-05,
+      "peak_rss_gib": 0.2160491943359375,
       "metadata": {}
     },
     {
       "name": "text_encoder_load",
-      "elapsed": 0.00925620796624571,
-      "peak_rss_gib": 0.228515625,
+      "elapsed": 0.011968749924562871,
+      "peak_rss_gib": 0.2279205322265625,
       "metadata": {
         "tensors": "713"
       }
     },
     {
       "name": "tokenizer_load",
-      "elapsed": 2.356097458046861,
-      "peak_rss_gib": 0.442108154296875,
+      "elapsed": 2.272097875014879,
+      "peak_rss_gib": 0.441864013671875,
       "metadata": {}
     },
     {
       "name": "pipeline_reload",
-      "elapsed": 2.3893428340088576,
-      "peak_rss_gib": 0.442108154296875,
+      "elapsed": 2.308401208021678,
+      "peak_rss_gib": 0.441864013671875,
       "metadata": {}
     },
     {
       "name": "text_encoder_unload",
-      "elapsed": 0.053483459050767124,
-      "peak_rss_gib": 0.442138671875,
+      "elapsed": 0.055958791985176504,
+      "peak_rss_gib": 0.44189453125,
       "metadata": {}
     },
     {
       "name": "dit_load",
-      "elapsed": 1.3376967499498278,
-      "peak_rss_gib": 8.098785400390625,
+      "elapsed": 1.3286767079262063,
+      "peak_rss_gib": 8.110305786132812,
       "metadata": {}
     },
     {
       "name": "vae_load",
-      "elapsed": 0.05908899998757988,
-      "peak_rss_gib": 8.160751342773438,
+      "elapsed": 0.05824108293745667,
+      "peak_rss_gib": 8.187469482421875,
       "metadata": {
         "tensors": "728"
       }
     },
     {
       "name": "dit_step_1",
-      "elapsed": 3.0045088339829817,
+      "elapsed": 3.1482079159468412,
       "peak_rss_gib": 7.93277589045465,
       "metadata": {}
     },
     {
       "name": "dit_step_2",
-      "elapsed": 2.955289833014831,
+      "elapsed": 2.9751758748898283,
       "peak_rss_gib": 7.93277589045465,
       "metadata": {}
     },
     {
       "name": "dit_step_3",
-      "elapsed": 2.967731708078645,
+      "elapsed": 2.9845497499918565,
       "peak_rss_gib": 7.93277589045465,
       "metadata": {}
     },
     {
       "name": "dit_step_4",
-      "elapsed": 2.9463950839126483,
+      "elapsed": 3.010912000085227,
       "peak_rss_gib": 7.93277589045465,
       "metadata": {}
     },
     {
       "name": "vae_decode",
-      "elapsed": 0.43668308400083333,
+      "elapsed": 0.4381096250144765,
       "peak_rss_gib": 7.944555686786771,
       "metadata": {}
     },
     {
       "name": "generation_1",
-      "elapsed": 12.357383333030157,
+      "elapsed": 12.748372417059727,
       "peak_rss_gib": 7.92893067933619,
       "metadata": {
         "prompt": "black and white pencil drawing on rough paper in the style of monet, a steampunk hairdryer battling a mechanical dragon over a Victorian city, copper and brass details, dramatic storm lighting.",
@@ -99,43 +99,43 @@
     },
     {
       "name": "save_1",
-      "elapsed": 0.05007933406159282,
+      "elapsed": 0.04874074994586408,
       "peak_rss_gib": 7.92893067933619,
       "metadata": {}
     },
     {
       "name": "dit_step_1",
-      "elapsed": 3.3366224999772385,
+      "elapsed": 3.620367542025633,
       "peak_rss_gib": 7.933004783466458,
       "metadata": {}
     },
     {
       "name": "dit_step_2",
-      "elapsed": 3.071887709083967,
+      "elapsed": 3.0274807499954477,
       "peak_rss_gib": 7.933004783466458,
       "metadata": {}
     },
     {
       "name": "dit_step_3",
-      "elapsed": 3.016923042014241,
+      "elapsed": 3.1479092499939725,
       "peak_rss_gib": 7.933004783466458,
       "metadata": {}
     },
     {
       "name": "dit_step_4",
-      "elapsed": 2.991236582980491,
+      "elapsed": 3.002642042003572,
       "peak_rss_gib": 7.933004783466458,
       "metadata": {}
     },
     {
       "name": "vae_decode",
-      "elapsed": 0.5522021669894457,
+      "elapsed": 0.6416054170113057,
       "peak_rss_gib": 7.944723533466458,
       "metadata": {}
     },
     {
       "name": "generation_2",
-      "elapsed": 13.016418584040366,
+      "elapsed": 13.48795025004074,
       "peak_rss_gib": 7.929098526015878,
       "metadata": {
         "prompt": "Anime shonen style, an astronaut riding a cosmic wolf through a nebula, fur, star trails, ethereal purple and rainbow lighting.",
@@ -146,18 +146,18 @@
     },
     {
       "name": "save_2",
-      "elapsed": 0.05647733306977898,
+      "elapsed": 0.05780029098968953,
       "peak_rss_gib": 7.929098526015878,
       "metadata": {}
     },
     {
       "name": "total_wall_clock",
-      "elapsed": 29.39754858298693,
+      "elapsed": 30.175262999953702,
       "peak_rss_gib": 7.929098526015878,
       "metadata": {}
     }
   ],
-  "total_wall_clock": 29.39754858298693,
+  "total_wall_clock": 30.175262999953702,
   "prompts": [
     {
       "index": 1,
@@ -166,7 +166,7 @@
       "quantize": null,
       "resolution": "1024x1024",
       "steps": 4,
-      "generation_time_seconds": 12.357383333030157,
+      "generation_time_seconds": 12.748372417059727,
       "peak_rss_gib": 7.92893067933619,
       "image_path": "test_01_airship_dragon_new.png"
     },
@@ -177,7 +177,7 @@
       "quantize": null,
       "resolution": "1024x1024",
       "steps": 4,
-      "generation_time_seconds": 13.016418584040366,
+      "generation_time_seconds": 13.48795025004074,
       "peak_rss_gib": 7.929098526015878,
       "image_path": "test_02_cosmic_wolf_new.png"
     }

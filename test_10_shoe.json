@@ -2,114 +2,94 @@
   "metadata": {
     "model": "microsoft/Mage-Flow-Turbo",
     "base_model": "MageFlow",
-    "generation_time_seconds": 20.02885470900219,
-    "created_at": "2026-07-27T16:13:35.434910",
+    "generation_time_seconds": 17.88152245793026,
+    "created_at": "2026-07-27T16:56:35.725096",
     "image_path": null,
     "image_paths": null,
     "image_strength": null,
-    "peak_memory_gib": 7.944555694237351
+    "peak_memory_gib": 8.041351318359375
   },
   "phases": [
     {
       "name": "python_startup",
-      "elapsed": 2.1999934688210487e-05,
-      "peak_rss_gib": 0.21636962890625,
+      "elapsed": 2.2541964426636696e-05,
+      "peak_rss_gib": 0.2166900634765625,
       "metadata": {}
     },
     {
       "name": "text_encoder_load",
-      "elapsed": 0.008708999957889318,
-      "peak_rss_gib": 0.22821044921875,
+      "elapsed": 0.008660334045998752,
+      "peak_rss_gib": 0.228363037109375,
       "metadata": {
         "tensors": "713"
       }
     },
     {
       "name": "tokenizer_load",
-      "elapsed": 1.9393734170589596,
-      "peak_rss_gib": 0.4412841796875,
+      "elapsed": 2.067915791994892,
+      "peak_rss_gib": 0.4402618408203125,
       "metadata": {}
     },
     {
       "name": "pipeline_load",
-      "elapsed": 1.9636476250598207,
-      "peak_rss_gib": 0.4412841796875,
+      "elapsed": 2.092277458985336,
+      "peak_rss_gib": 0.4402618408203125,
       "metadata": {}
     },
     {
-      "name": "text_encode",
-      "elapsed": 1.3851328750606626,
-      "peak_rss_gib": 7.6878204345703125,
-      "metadata": {
-        "cache": "MISS"
-      }
-    },
-    {
       "name": "text_encoder_unload",
-      "elapsed": 0.09234704193659127,
-      "peak_rss_gib": 1.22625732421875,
+      "elapsed": 0.04021479107905179,
+      "peak_rss_gib": 0.44036865234375,
       "metadata": {}
     },
     {
       "name": "dit_load",
-      "elapsed": 1.3524937080219388,
-      "peak_rss_gib": 7.66879777982831,
+      "elapsed": 1.3186805410077795,
+      "peak_rss_gib": 8.041351318359375,
       "metadata": {}
     },
     {
       "name": "vae_load",
-      "elapsed": 0.10769408394116908,
-      "peak_rss_gib": 7.925939911976457,
+      "elapsed": 0.08288183296099305,
+      "peak_rss_gib": 7.925726281479001,
       "metadata": {
         "tensors": "728"
       }
     },
     {
-      "name": "vae_load",
-      "elapsed": 1.4922437499044463,
-      "peak_rss_gib": 7.925939911976457,
-      "metadata": {}
-    },
-    {
-      "name": "dit_load",
-      "elapsed": 1.4984485410386696,
-      "peak_rss_gib": 7.925939911976457,
-      "metadata": {}
-    },
-    {
       "name": "dit_step_1",
-      "elapsed": 3.233232666971162,
-      "peak_rss_gib": 7.9327758979052305,
+      "elapsed": 3.2740444999653846,
+      "peak_rss_gib": 7.93277589045465,
       "metadata": {}
     },
     {
       "name": "dit_step_2",
-      "elapsed": 3.182048000046052,
-      "peak_rss_gib": 7.9327758979052305,
+      "elapsed": 3.0693278330145404,
+      "peak_rss_gib": 7.93277589045465,
       "metadata": {}
     },
     {
       "name": "dit_step_3",
-      "elapsed": 3.2447142909513786,
-      "peak_rss_gib": 7.9327758979052305,
+      "elapsed": 3.2044101250357926,
+      "peak_rss_gib": 7.93277589045465,
       "metadata": {}
     },
     {
       "name": "dit_step_4",
-      "elapsed": 3.2205464999424294,
-      "peak_rss_gib": 7.9327758979052305,
+      "elapsed": 3.162079415982589,
+      "peak_rss_gib": 7.93277589045465,
       "metadata": {}
     },
     {
       "name": "vae_decode",
-      "elapsed": 2.040476708090864,
-      "peak_rss_gib": 7.944555694237351,
+      "elapsed": 1.464738583075814,
+      "peak_rss_gib": 7.944555686786771,
       "metadata": {}
     },
     {
       "name": "generation",
-      "elapsed": 17.971140542067587,
-      "peak_rss_gib": 7.928930686786771,
+      "elapsed": 15.695625249994919,
+      "peak_rss_gib": 7.92893067933619,
       "metadata": {
         "prompt": "An unbranded futuristic running shoe made from white technical mesh with a vivid orange sole, floating above a pale gray studio surface, dramatic softbox lighting, premium product photography, photorealistic.",
         "resolution": "1024x1024",
@@ -119,16 +99,16 @@
     },
     {
       "name": "save_png",
-      "elapsed": 0.06961420900188386,
-      "peak_rss_gib": 7.928930686786771,
+      "elapsed": 0.06703716702759266,
+      "peak_rss_gib": 7.92893067933619,
       "metadata": {}
     },
     {
       "name": "total_wall_clock",
-      "elapsed": 20.02885470900219,
-      "peak_rss_gib": 7.928930686786771,
+      "elapsed": 17.88152245793026,
+      "peak_rss_gib": 7.92893067933619,
       "metadata": {}
     }
   ],
-  "total_wall_clock": 20.02885470900219
+  "total_wall_clock": 17.88152245793026
 }

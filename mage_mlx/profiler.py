@@ -523,8 +523,19 @@ class LiveReport:
         elapsed: float,
         peak_rss_gib: Optional[float] = None,
         saved_file: Optional[str] = None,
+        loading_mode: Optional[str] = None,
     ) -> None:
-        """Called when a phase completes — prints timing + RAM."""
+        """Called when a phase completes — prints timing + RAM.
+
+        Args:
+            name: Phase name.
+            elapsed: Elapsed seconds (ignored if loading_mode is set).
+            peak_rss_gib: Peak memory in GiB.
+            saved_file: Optional saved file path (shown with green arrow).
+            loading_mode: If set (e.g. "lazy"), displayed instead of the
+                time string. Used for phases where the actual work happens
+                later (e.g. text_encoder_load where weights are lazy-loaded).
+        """
         row = None
         for r in reversed(self.phases):
             if r.name == name and r.elapsed is None:
@@ -542,7 +553,12 @@ class LiveReport:
             self._phase_times.append(elapsed)
 
         # Real-time: no time coloring (don't know min/max yet)
-        time_str = _fmt_time(elapsed) if elapsed is not None else f"{_C.GRAY}—{_C.RESET}"
+        if loading_mode is not None:
+            time_str = f"{_C.YELLOW}{loading_mode}{_C.RESET}"
+        elif elapsed is not None:
+            time_str = _fmt_time(elapsed)
+        else:
+            time_str = f"{_C.GRAY}—{_C.RESET}"
         ram_str = _colorize_ram(peak_rss_gib) if peak_rss_gib is not None else f"{_C.GRAY}—{_C.RESET}"
 
         # Print empty line before phase for visual separation

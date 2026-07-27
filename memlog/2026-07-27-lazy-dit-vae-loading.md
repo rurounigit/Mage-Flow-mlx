@@ -83,6 +83,13 @@ This reduces peak RAM from ~15.4 GiB to ~7.9 GiB on cache miss, because Qwen
    now includes `dit_load` and `vae_load` in the explicit set, preventing
    double-reporting when `load_dit_vae()` handles profiler start/stop internally.
 
+5. **"lazy loading" label**: Added `loading_mode` parameter to
+   `LiveReport.stop_phase()`. The `on_phase_complete` callback in both
+   `generate.py` and `worker.py` passes `loading_mode="lazy loading"` for
+   the `text_encoder_load` phase, since Qwen weights are lazy-loaded during
+   `text_encode` (not during the constructor). This replaces the misleading
+   `0.0s` timing with a descriptive label.
+
 ## Backward Compatibility
 
 - `from_pretrained()` is unchanged and still works for all existing callers.
