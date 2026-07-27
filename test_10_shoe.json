@@ -2,94 +2,114 @@
   "metadata": {
     "model": "microsoft/Mage-Flow-Turbo",
     "base_model": "MageFlow",
-    "generation_time_seconds": 16.867392542073503,
-    "created_at": "2026-07-27T15:16:48.654489",
+    "generation_time_seconds": 20.02885470900219,
+    "created_at": "2026-07-27T16:13:35.434910",
     "image_path": null,
     "image_paths": null,
     "image_strength": null,
-    "peak_memory_gib": 8.054428100585938
+    "peak_memory_gib": 7.944555694237351
   },
   "phases": [
     {
       "name": "python_startup",
-      "elapsed": 2.2709020413458347e-05,
-      "peak_rss_gib": 0.2157745361328125,
+      "elapsed": 2.1999934688210487e-05,
+      "peak_rss_gib": 0.21636962890625,
       "metadata": {}
-    },
-    {
-      "name": "dit_load",
-      "elapsed": 1.3122123749926686,
-      "peak_rss_gib": 7.8931121826171875,
-      "metadata": {}
-    },
-    {
-      "name": "vae_load",
-      "elapsed": 0.05882849998306483,
-      "peak_rss_gib": 8.054428100585938,
-      "metadata": {
-        "tensors": "728"
-      }
     },
     {
       "name": "text_encoder_load",
-      "elapsed": 0.007845542044378817,
-      "peak_rss_gib": 8.0469970703125,
+      "elapsed": 0.008708999957889318,
+      "peak_rss_gib": 0.22821044921875,
       "metadata": {
         "tensors": "713"
       }
     },
     {
       "name": "tokenizer_load",
-      "elapsed": 2.1617738750064746,
-      "peak_rss_gib": 7.92572627030313,
+      "elapsed": 1.9393734170589596,
+      "peak_rss_gib": 0.4412841796875,
       "metadata": {}
     },
     {
       "name": "pipeline_load",
-      "elapsed": 3.582433499977924,
-      "peak_rss_gib": 7.925726303830743,
+      "elapsed": 1.9636476250598207,
+      "peak_rss_gib": 0.4412841796875,
       "metadata": {}
     },
     {
+      "name": "text_encode",
+      "elapsed": 1.3851328750606626,
+      "peak_rss_gib": 7.6878204345703125,
+      "metadata": {
+        "cache": "MISS"
+      }
+    },
+    {
       "name": "text_encoder_unload",
-      "elapsed": 0.04137174994684756,
-      "peak_rss_gib": 7.925726281479001,
+      "elapsed": 0.09234704193659127,
+      "peak_rss_gib": 1.22625732421875,
+      "metadata": {}
+    },
+    {
+      "name": "dit_load",
+      "elapsed": 1.3524937080219388,
+      "peak_rss_gib": 7.66879777982831,
+      "metadata": {}
+    },
+    {
+      "name": "vae_load",
+      "elapsed": 0.10769408394116908,
+      "peak_rss_gib": 7.925939911976457,
+      "metadata": {
+        "tensors": "728"
+      }
+    },
+    {
+      "name": "vae_load",
+      "elapsed": 1.4922437499044463,
+      "peak_rss_gib": 7.925939911976457,
+      "metadata": {}
+    },
+    {
+      "name": "dit_load",
+      "elapsed": 1.4984485410386696,
+      "peak_rss_gib": 7.925939911976457,
       "metadata": {}
     },
     {
       "name": "dit_step_1",
-      "elapsed": 3.1994617499876767,
-      "peak_rss_gib": 7.932775879278779,
+      "elapsed": 3.233232666971162,
+      "peak_rss_gib": 7.9327758979052305,
       "metadata": {}
     },
     {
       "name": "dit_step_2",
-      "elapsed": 3.113878999953158,
-      "peak_rss_gib": 7.932775879278779,
+      "elapsed": 3.182048000046052,
+      "peak_rss_gib": 7.9327758979052305,
       "metadata": {}
     },
     {
       "name": "dit_step_3",
-      "elapsed": 3.1578016250859946,
-      "peak_rss_gib": 7.932775879278779,
+      "elapsed": 3.2447142909513786,
+      "peak_rss_gib": 7.9327758979052305,
       "metadata": {}
     },
     {
       "name": "dit_step_4",
-      "elapsed": 3.1923175000119954,
-      "peak_rss_gib": 7.932775879278779,
+      "elapsed": 3.2205464999424294,
+      "peak_rss_gib": 7.9327758979052305,
       "metadata": {}
     },
     {
       "name": "vae_decode",
-      "elapsed": 0.42463304195553064,
-      "peak_rss_gib": 7.9445556756109,
+      "elapsed": 2.040476708090864,
+      "peak_rss_gib": 7.944555694237351,
       "metadata": {}
     },
     {
       "name": "generation",
-      "elapsed": 13.187033166061155,
-      "peak_rss_gib": 7.928717045113444,
+      "elapsed": 17.971140542067587,
+      "peak_rss_gib": 7.928930686786771,
       "metadata": {
         "prompt": "An unbranded futuristic running shoe made from white technical mesh with a vivid orange sole, floating above a pale gray studio surface, dramatic softbox lighting, premium product photography, photorealistic.",
         "resolution": "1024x1024",
@@ -99,16 +119,16 @@
     },
     {
       "name": "save_png",
-      "elapsed": 0.06622833292931318,
-      "peak_rss_gib": 7.928717045113444,
+      "elapsed": 0.06961420900188386,
+      "peak_rss_gib": 7.928930686786771,
       "metadata": {}
     },
     {
       "name": "total_wall_clock",
-      "elapsed": 16.867392542073503,
-      "peak_rss_gib": 7.928717045113444,
+      "elapsed": 20.02885470900219,
+      "peak_rss_gib": 7.928930686786771,
       "metadata": {}
     }
   ],
-  "total_wall_clock": 16.867392542073503
+  "total_wall_clock": 20.02885470900219
 }

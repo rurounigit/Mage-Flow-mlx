@@ -16,12 +16,15 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import os
 import sys
 import traceback
 from datetime import datetime
 from typing import Optional
+
+import mlx.core as mx
 
 
 def _get_model_name(model_dir: str) -> str:
@@ -192,6 +195,8 @@ def main():
             "pipeline_load",
             "generation",
             "save_png",
+            "dit_load",
+            "vae_load",
         }
         # Phases that are explicitly reported via report.stop_phase (skip in callback).
         # "text_encoder_unload" is NOT in this list — it's profiled inside
@@ -328,13 +333,16 @@ def main():
             print(f"  Metadata saved to {_C.GREEN}{base_path}.json{_C.RESET} and {_C.GREEN}{base_path}.md{_C.RESET}")
         return
 
-    # --- Phase: Pipeline load (DiT + VAE + text encoder) ---
+    # --- Phase: Load text encoder + tokenizer (DiT + VAE deferred) ---
+    # We load only the text encoder first, encode the prompt, unload it,
+    # THEN load DiT + VAE. This reduces peak RAM from ~15.4 GiB to ~7.9 GiB
+    # on cache miss, because Qwen (~7.5 GiB) is never resident alongside
+    # DiT + VAE (~7.9 GiB) simultaneously.
     prof.start("pipeline_load")
     try:
-        pipeline = MageFlowPipeline.from_pretrained(
+        pipeline = MageFlowPipeline.from_pretrained_text_encoder(
             model_dir=args.model,
             num_steps=args.steps,
-            quantize=args.quantize,
             profiler=prof,
         )
     except Exception as e:
@@ -358,8 +366,8 @@ def main():
     embedding_cache = EmbeddingCache(model_dir=args.model)
     te_path = resolve_text_encoder_path(args.model)
 
-    # --- Phase: Generation ---
-    # Print prompt header BEFORE generation starts (so it appears right before metadata)
+    # --- Phase: Text encoding (Qwen) ---
+    # Print prompt header BEFORE encoding starts (so it appears right before metadata)
     if report:
         report.prompt_header(1, 1)
         report.add_metadata("generation", "prompt", args.prompt)
@@ -369,16 +377,97 @@ def main():
         print()  # Empty line after metadata, before generation steps
 
     prof.start("generation")
-    image = pipeline.generate(
-        prompt=args.prompt,
+
+    # Check embedding cache before encoding — on cache hit, Qwen is
+    # never materialized in Metal memory, saving ~7.5 GiB peak RAM.
+    cached_pos = None
+    pos_key = None
+    if embedding_cache is not None:
+        pos_key = embedding_cache.make_key(
+            prompt=args.prompt,
+            negative_prompt=args.negative_prompt,
+            te_path=te_path,
+        )
+        cached_pos = embedding_cache.get(pos_key)
+
+    cached_neg = None
+    neg_key = None
+    if args.guidance > 1.0 and embedding_cache is not None:
+        neg_key = embedding_cache.make_key(
+            prompt=args.negative_prompt,
+            negative_prompt=" ",
+            te_path=te_path,
+        )
+        cached_neg = embedding_cache.get(neg_key)
+
+    need_encode = cached_pos is None or (
+        args.guidance > 1.0 and cached_neg is None
+    )
+
+    if need_encode:
+        prof.start("text_encode")
+        if cached_pos is not None:
+            txt_embeds = cached_pos
+            print("  Cache HIT — skipping Qwen encode")
+        else:
+            txt_embeds, _ = pipeline.text_encoder.encode_text_to_image(
+                prompts=[args.prompt],
+                tokenizer=pipeline.tokenizer,
+                max_sequence_length=2048,
+            )
+            mx.eval(txt_embeds)
+            if pos_key is not None:
+                embedding_cache.put(pos_key, txt_embeds)
+
+        neg_txt_embeds = None
+        if args.guidance > 1.0:
+            if cached_neg is not None:
+                neg_txt_embeds = cached_neg
+            else:
+                neg_txt_embeds, _ = pipeline.text_encoder.encode_text_to_image(
+                    prompts=[args.negative_prompt],
+                    tokenizer=pipeline.tokenizer,
+                    max_sequence_length=2048,
+                )
+                mx.eval(neg_txt_embeds)
+                if neg_key is not None:
+                    embedding_cache.put(neg_key, neg_txt_embeds)
+        prof.stop("text_encode")
+        cache_label = "HIT" if cached_pos is not None else "MISS"
+        prof.set_metadata("text_encode", "cache", cache_label)
+    else:
+        txt_embeds = cached_pos
+        neg_txt_embeds = cached_neg
+        print("  Cache HIT — skipping Qwen encode")
+        prof.set_metadata("generation", "cache", "HIT")
+
+    # Unload Qwen — it's only needed for prompt encoding
+    prof.start("text_encoder_unload")
+    pipeline.text_encoder.unload()
+    gc.collect()
+    mx.clear_cache()
+    prof.stop("text_encoder_unload")
+
+    # --- Phase: Load DiT + VAE (after Qwen is unloaded) ---
+    # load_dit_vae() handles profiler.start/stop for dit_load and vae_load internally
+    pipeline.load_dit_vae(
+        model_dir=args.model,
+        quantize=args.quantize,
+        profiler=prof,
+    )
+    if report:
+        report.stop_phase("dit_load", prof.get_elapsed("dit_load") or 0.0, prof.get_phase_rss("dit_load"))
+        report.stop_phase("vae_load", prof.get_elapsed("vae_load") or 0.0, prof.get_phase_rss("vae_load"))
+
+    # --- Phase: Generation (DiT steps + VAE decode) ---
+    image = pipeline._generate_from_embeds(
+        txt_embeds=txt_embeds,
+        neg_txt_embeds=neg_txt_embeds,
         height=args.height,
         width=args.width,
         seed=args.seed,
         guidance_scale=args.guidance,
-        negative_prompt=args.negative_prompt,
         profiler=prof,
-        embedding_cache=embedding_cache,
-        te_path=te_path,
     )
     prof.stop("generation")
     if report:
@@ -386,6 +475,8 @@ def main():
             "generation",
             "text_encode",
             "text_encoder_unload",
+            "dit_load",
+            "vae_load",
             "dit_step_",
             "vae_decode",
         ) or prof.get_phase_rss("generation")
@@ -429,6 +520,8 @@ def main():
                 "generation",
                 "text_encode",
                 "text_encoder_unload",
+                "dit_load",
+                "vae_load",
                 "dit_step_",
                 "vae_decode",
             ) or prof.get_peak_rss_gib(),

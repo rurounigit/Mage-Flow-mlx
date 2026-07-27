@@ -170,8 +170,8 @@ class MageFlowPipeline:
 
     def __init__(
         self,
-        transformer: MageFlow,
-        vae: MageVAE,
+        transformer: Optional[MageFlow],
+        vae: Optional[MageVAE],
         text_encoder: MageFlowTextEncoder,
         tokenizer: "MageFlowTokenizer | None" = None,
         num_steps: int = 4,
@@ -318,6 +318,163 @@ class MageFlowPipeline:
             profiler.stop("tokenizer_load")
 
         return cls(transformer, vae, text_encoder, tokenizer=tokenizer, num_steps=num_steps)
+
+    @classmethod
+    def from_pretrained_text_encoder(
+        cls,
+        model_dir: str = "models/microsoft_Mage-Flow-Turbo",
+        num_steps: int = 4,
+        profiler: Optional["object"] = None,
+    ) -> "MageFlowPipeline":
+        """Load only the text encoder and tokenizer for prompt encoding.
+
+        DiT and VAE are not loaded — call ``load_dit_vae()`` after encoding
+        to bring them into memory for image generation. This reordering
+        reduces peak RAM from ~15.4 GiB to ~7.9 GiB on cache miss, because
+        the ~7.5 GiB Qwen text encoder is never resident alongside the
+        DiT + VAE simultaneously.
+
+        Args:
+            model_dir: Directory containing converted MLX weights or HF repo ID
+            num_steps: Number of denoising steps
+            profiler: Optional Profiler instance for phase-level timing
+
+        Returns:
+            MageFlowPipeline instance with transformer=None, vae=None
+        """
+        model_dir, _ = ensure_mlx_model(model_dir, quantize=None)
+
+        # Load text encoder
+        if profiler:
+            profiler.start("text_encoder_load")
+        te_weights_path = resolve_text_encoder_path(model_dir)
+        text_encoder = MageFlowTextEncoder(
+            model_path=te_weights_path if os.path.exists(te_weights_path) else None,
+        )
+        if profiler:
+            profiler.stop("text_encoder_load")
+            profiler.set_metadata("text_encoder_load", "tensors", str(getattr(text_encoder, "num_tensors", 0)))
+
+        # Load tokenizer for text encoding
+        if profiler:
+            profiler.start("tokenizer_load")
+        from transformers import AutoTokenizer
+        raw_tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-VL-8B-Instruct")
+        tokenizer = MageFlowTokenizer(raw_tokenizer)
+        if profiler:
+            profiler.stop("tokenizer_load")
+
+        return cls(None, None, text_encoder, tokenizer=tokenizer, num_steps=num_steps)
+
+    def load_dit_vae(
+        self,
+        model_dir: str = "models/microsoft_Mage-Flow-Turbo",
+        quantize: int | None = None,
+        profiler: Optional["object"] = None,
+    ) -> None:
+        """Load DiT and VAE weights into the pipeline.
+
+        Call this after text encoding is complete and the text encoder has
+        been unloaded, to minimize peak memory usage. The text encoder is
+        not needed for DiT denoising or VAE decoding.
+
+        Args:
+            model_dir: Directory containing converted MLX weights or HF repo ID
+            quantize: If set (4 or 8), quantize transformer weights to N bits
+            profiler: Optional Profiler instance for phase-level timing
+        """
+        if quantize is not None and quantize not in SUPPORTED_QUANTIZATION_BITS:
+            raise ValueError(
+                "quantize must be None, 4, or 8; "
+                f"received {quantize}"
+            )
+        model_dir, actual_quantize = ensure_mlx_model(model_dir, quantize=quantize)
+
+        # Load DiT config
+        config_path = os.path.join(model_dir, "transformer_config.json")
+        with open(config_path) as f:
+            dit_config = json.load(f)
+
+        params = MageFlowParams(
+            in_channels=dit_config.get("in_channels", 128),
+            out_channels=dit_config.get("out_channels", 128),
+            context_in_dim=dit_config.get("context_in_dim", 2560),
+            hidden_size=dit_config.get("hidden_size", 3072),
+            num_heads=dit_config.get("num_heads", 24),
+            depth=dit_config.get("depth", 12),
+            axes_dim=dit_config.get("axes_dim", [16, 56, 56]),
+            patch_size=dit_config.get("patch_size", 1),
+        )
+        transformer = MageFlow(params)
+
+        # Load canonical BF16 or a compatible persistent packed cache.
+        dit_weights_path = os.path.join(model_dir, "transformer.safetensors")
+        if actual_quantize in SUPPORTED_QUANTIZATION_BITS:
+            quantized_path, quantized_metadata_path = _quantized_cache_paths(
+                model_dir, actual_quantize
+            )
+            expected_metadata = _expected_quantization_metadata(
+                dit_weights_path, actual_quantize
+            )
+            cache_is_valid = _is_valid_quantized_cache(
+                quantized_path,
+                quantized_metadata_path,
+                expected_metadata,
+            )
+            if cache_is_valid:
+                if profiler:
+                    profiler.start("dit_load")
+                quantized_layers = _quantize_transformer(
+                    transformer, actual_quantize
+                )
+                transformer.load_weights(quantized_path, strict=True)
+                mx.eval(transformer.parameters())
+                if profiler:
+                    profiler.stop("dit_load")
+            else:
+                if profiler:
+                    profiler.start("dit_load")
+                weights = mx.load(dit_weights_path)
+                transformer.load_weights(list(weights.items()), strict=False)
+                del weights
+                mx.eval(transformer.parameters())
+                print(f"  Quantizing DiT to {actual_quantize}-bit...")
+                quantized_layers = _quantize_transformer(
+                    transformer, actual_quantize
+                )
+                _save_quantized_cache(
+                    transformer,
+                    quantized_path,
+                    quantized_metadata_path,
+                    expected_metadata,
+                )
+                if profiler:
+                    profiler.stop("dit_load")
+                print(
+                    f"  Cached {actual_quantize}-bit DiT at {quantized_path} "
+                    f"({quantized_layers} quantized layers)"
+                )
+        else:
+            if profiler:
+                profiler.start("dit_load")
+            weights = mx.load(dit_weights_path)
+            transformer.load_weights(list(weights.items()), strict=False)
+            mx.eval(transformer.parameters())
+            if profiler:
+                profiler.stop("dit_load")
+
+        # Load VAE
+        if profiler:
+            profiler.start("vae_load")
+        vae_weights_path = os.path.join(model_dir, "vae.safetensors")
+        vae = MageVAE(vae_weights_path, sample_posterior=True)
+        mx.eval(vae.parameters())
+        if profiler:
+            profiler.stop("vae_load")
+            profiler.set_metadata("vae_load", "tensors", str(getattr(vae, "num_tensors", 0)))
+
+        self.transformer = transformer
+        self.vae = vae
 
     def generate(
         self,
@@ -538,6 +695,11 @@ class MageFlowPipeline:
             raise ValueError("height and width must be positive multiples of 16")
         if guidance_scale < 1.0:
             raise ValueError("guidance_scale must be at least 1.0")
+        if self.transformer is None or self.vae is None:
+            raise RuntimeError(
+                "DiT and VAE are not loaded. Call load_dit_vae() before "
+                "generating images."
+            )
 
         mx.random.seed(seed)
 

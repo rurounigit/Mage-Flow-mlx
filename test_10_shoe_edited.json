@@ -2,60 +2,60 @@
   "metadata": {
     "model": "Mage-Flow-Edit-Turbo",
     "base_model": "microsoft/Mage-Flow-Edit-Turbo",
-    "generation_time_seconds": 52.69775204209145,
-    "created_at": "2026-07-26T23:20:57.408630",
+    "generation_time_seconds": 49.16183404205367,
+    "created_at": "2026-07-27T16:16:11.850124",
     "image_path": "test_10_shoe.png",
     "image_paths": null,
     "image_strength": null,
-    "peak_memory_gib": 16.137024026364088
+    "peak_memory_gib": 16.120695484802127
   },
   "phases": [
     {
       "name": "python_startup",
-      "elapsed": 2.150004729628563e-05,
-      "peak_rss_gib": 0.2159423828125,
+      "elapsed": 2.2666994482278824e-05,
+      "peak_rss_gib": 0.21636962890625,
       "metadata": {}
     },
     {
       "name": "pipeline_load",
-      "elapsed": 4.607905416050926,
+      "elapsed": 4.660510457935743,
       "peak_rss_gib": 16.120695484802127,
       "metadata": {}
     },
     {
       "name": "edit_step_1",
-      "elapsed": 9.226957833976485,
-      "peak_rss_gib": 16.137024026364088,
+      "elapsed": 7.068283541011624,
+      "peak_rss_gib": 7.870947938412428,
       "metadata": {}
     },
     {
       "name": "edit_step_2",
-      "elapsed": 6.76365420804359,
-      "peak_rss_gib": 16.137024026364088,
+      "elapsed": 6.139374832971953,
+      "peak_rss_gib": 7.870947938412428,
       "metadata": {}
     },
     {
       "name": "edit_step_3",
-      "elapsed": 6.587767958058976,
-      "peak_rss_gib": 16.137024026364088,
+      "elapsed": 6.22412820905447,
+      "peak_rss_gib": 7.870947938412428,
       "metadata": {}
     },
     {
       "name": "edit_step_4",
-      "elapsed": 6.612136207986623,
-      "peak_rss_gib": 16.137024026364088,
+      "elapsed": 6.400674375006929,
+      "peak_rss_gib": 7.870947938412428,
       "metadata": {}
     },
     {
       "name": "vae_decode",
-      "elapsed": 0.37048149993643165,
-      "peak_rss_gib": 16.131210384890437,
+      "elapsed": 0.34733066603075713,
+      "peak_rss_gib": 7.8651190381497145,
       "metadata": {}
     },
     {
       "name": "edit",
-      "elapsed": 47.36519937496632,
-      "peak_rss_gib": 16.122421322390437,
+      "elapsed": 43.95062458398752,
+      "peak_rss_gib": 7.8563299756497145,
       "metadata": {
         "prompt": "change the shoe to deep burgundy polished leather with a translucent smoke-gray sole and subtle chrome details. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
         "resolution": "1024x1024",
@@ -65,16 +65,16 @@
     },
     {
       "name": "save_png",
-      "elapsed": 0.06190145795699209,
-      "peak_rss_gib": 16.122421322390437,
+      "elapsed": 0.06909775000531226,
+      "peak_rss_gib": 7.8563299756497145,
       "metadata": {}
     },
     {
       "name": "total_wall_clock",
-      "elapsed": 52.69775204209145,
-      "peak_rss_gib": 0.3272552490234375,
+      "elapsed": 49.16183404205367,
+      "peak_rss_gib": 0.82257080078125,
       "metadata": {}
     }
   ],
-  "total_wall_clock": 52.69775204209145
+  "total_wall_clock": 49.16183404205367
 }

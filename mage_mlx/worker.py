@@ -9,6 +9,10 @@ Qwen session (load once, encode all, unload once), then all images are
 generated using cached embeddings. This amortizes the ~8 GB Qwen load
 across the entire batch instead of paying it per-prompt.
 
+**Memory optimization**: Qwen (~7.5 GiB) is loaded and unloaded BEFORE
+DiT + VAE (~7.9 GiB) are loaded, so peak RAM is max(Qwen, DiT+VAE)
+instead of Qwen + DiT + VAE simultaneously (~15.4 GiB).
+
 Usage:
     .venv/bin/python generate.py --worker prompts.jsonl --metadata
 
@@ -166,9 +170,14 @@ def run_worker(
 ) -> tuple[Optional[dict], Optional[list]]:
     """Run the persistent JSONL worker in prompt queue mode.
 
-    Phase 1: Load pipeline (DiT + VAE resident). Load Qwen once, encode all
-    prompts (checking embedding cache first), save to cache, unload Qwen.
+    Phase 1: Load text encoder only. Encode all prompts (checking embedding
+    cache first), save to cache, unload Qwen.
+    Phase 1.5: Load DiT + VAE (after Qwen is unloaded — reduces peak RAM).
     Phase 2: Generate all images using cached embeddings.
+
+    The key optimization: Qwen (~7.5 GiB) is loaded and unloaded BEFORE
+    DiT + VAE (~7.9 GiB) are loaded, so peak RAM is max(Qwen, DiT+VAE)
+    instead of Qwen + DiT + VAE simultaneously (~15.4 GiB).
 
     Args:
         jsonl_path: Path to the JSONL prompts file
@@ -194,10 +203,11 @@ def run_worker(
     # Set up real-time callback for LiveReport
     # The callback handles sub-phases (dit_step_N, vae_decode, etc.) in real-time.
     # Main phases are reported explicitly via stop_phase to add saved_file/metadata.
+    _EXPLICIT_EXACT = {"dit_load", "vae_load"}
     _EXPLICIT_PREFIXES = ("pipeline_reload", "text_encoder_unload", "text_encode_", "generation_", "save_", "total_wall_clock", "python_startup")
     if report and profiler:
         def _on_phase_complete(name, elapsed, rss):
-            if any(name.startswith(p) for p in _EXPLICIT_PREFIXES):
+            if name in _EXPLICIT_EXACT or any(name.startswith(p) for p in _EXPLICIT_PREFIXES):
                 return  # handled explicitly via stop_phase
             report.stop_phase(name, elapsed or 0.0, rss)
         profiler.on_phase_complete = _on_phase_complete
@@ -210,14 +220,17 @@ def run_worker(
     pipeline: Optional[MageFlowPipeline] = None
     te_path: Optional[str] = None
 
-    # --- Phase 0: Load pipeline (once) ---
+    # --- Phase 0: Load text encoder + tokenizer (DiT + VAE deferred) ---
+    # We load only the text encoder first, encode all prompts, unload it,
+    # THEN load DiT + VAE. This reduces peak RAM from ~15.4 GiB to ~7.9 GiB
+    # on cache miss, because Qwen (~7.5 GiB) is never resident alongside
+    # DiT + VAE (~7.9 GiB) simultaneously.
     first_params = merge_params(defaults, prompts[0])
     if profiler:
         profiler.start("pipeline_reload")
-    pipeline = MageFlowPipeline.from_pretrained(
+    pipeline = MageFlowPipeline.from_pretrained_text_encoder(
         model_dir=first_params["model"],
         num_steps=first_params.get("steps", 4),
-        quantize=first_params.get("quantize"),
         profiler=profiler,
     )
     te_path = os.path.join(first_params["model"], "text_encoder.safetensors")
@@ -313,6 +326,20 @@ def run_worker(
         report.stop_phase("text_encoder_unload", profiler.get_elapsed("text_encoder_unload") or 0.0, profiler.get_phase_rss("text_encoder_unload"))
     print("  Qwen unloaded (batch encoding complete)")
 
+    # --- Phase 1.5: Load DiT + VAE (after Qwen is unloaded) ---
+    # This is the key optimization: DiT + VAE are loaded AFTER the text
+    # encoder is unloaded, so peak RAM is max(Qwen, DiT+VAE) instead of
+    # Qwen + DiT + VAE simultaneously.
+    # load_dit_vae() handles profiler.start/stop for dit_load and vae_load internally
+    pipeline.load_dit_vae(
+        model_dir=current_params["model"],
+        quantize=current_params.get("quantize"),
+        profiler=profiler,
+    )
+    if report:
+        report.stop_phase("dit_load", profiler.get_elapsed("dit_load") or 0.0, profiler.get_phase_rss("dit_load"))
+        report.stop_phase("vae_load", profiler.get_elapsed("vae_load") or 0.0, profiler.get_phase_rss("vae_load"))
+
     # --- Phase 2: Generate all images using cached embeddings ---
     print(f"\n{'=' * 60}")
     print("Phase 2: Generating images (DiT + VAE)")
@@ -335,26 +362,18 @@ def run_worker(
         if needs_pipeline:
             if profiler:
                 profiler.start(f"pipeline_reload_{i + 1}")
-            pipeline = MageFlowPipeline.from_pretrained(
+            # Only reload DiT + VAE — the text encoder is already unloaded
+            # and we use cached embeddings for all prompts.
+            pipeline.load_dit_vae(
                 model_dir=params["model"],
-                num_steps=params.get("steps", 4),
                 quantize=params.get("quantize"),
                 profiler=profiler,
             )
-            # Unload text encoder from new pipeline (we use cached embeddings)
-            if profiler:
-                profiler.start(f"text_encoder_unload_{i + 1}")
-            pipeline.text_encoder.unload()
-            gc.collect()
-            mx.clear_cache()
-            if profiler:
-                profiler.stop(f"text_encoder_unload_{i + 1}")
             current_params = dict(params)
             if profiler:
                 profiler.stop(f"pipeline_reload_{i + 1}")
             if report:
                 report.stop_phase(f"pipeline_reload_{i + 1}", profiler.get_elapsed(f"pipeline_reload_{i + 1}") or 0.0, profiler.get_phase_rss(f"pipeline_reload_{i + 1}"))
-                report.stop_phase(f"text_encoder_unload_{i + 1}", profiler.get_elapsed(f"text_encoder_unload_{i + 1}") or 0.0, profiler.get_phase_rss(f"text_encoder_unload_{i + 1}"))
 
         # Handle scheduler reset (steps change)
         if needs_scheduler:
