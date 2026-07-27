@@ -570,6 +570,7 @@ def _run_edit(args, prof, report=None):
         edit = MageFlowEdit(
             quantize=args.quantize,
             model_path=args.model,
+            load_dit_vae=False,
         )
         prof.stop("pipeline_load")
     except Exception as e:
@@ -609,10 +610,25 @@ def _run_edit(args, prof, report=None):
     )
     prof.stop("edit")
     if report:
+        # Report dit_load and vae_load phases (started/stopped inside
+        # MageFlowEdit.load_dit_vae(), which is called from generate_image).
+        # These are in _EXPLICIT_EXACT so the callback skips them.
+        report.stop_phase(
+            "dit_load",
+            prof.get_elapsed("dit_load") or 0.0,
+            prof.get_phase_rss("dit_load"),
+        )
+        report.stop_phase(
+            "vae_load",
+            prof.get_elapsed("vae_load") or 0.0,
+            prof.get_phase_rss("vae_load"),
+        )
         edit_rss = prof.get_max_phase_rss(
             "edit",
             "text_encode",
             "text_encoder_unload",
+            "dit_load",
+            "vae_load",
             "dit_step_",
             "edit_step_",
             "vae_decode",
