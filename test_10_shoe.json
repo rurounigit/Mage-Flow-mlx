@@ -2,99 +2,93 @@
   "metadata": {
     "model": "microsoft/Mage-Flow-Turbo",
     "base_model": "MageFlow",
-    "generation_time_seconds": 20.068566250032745,
-    "created_at": "2026-07-26T23:17:14.575347",
+    "generation_time_seconds": 16.867392542073503,
+    "created_at": "2026-07-27T15:16:48.654489",
     "image_path": null,
     "image_paths": null,
     "image_strength": null,
-    "peak_memory_gib": 15.41837185062468
+    "peak_memory_gib": 8.054428100585938
   },
   "phases": [
     {
       "name": "python_startup",
-      "elapsed": 2.274999860674143e-05,
-      "peak_rss_gib": 0.2172698974609375,
+      "elapsed": 2.2709020413458347e-05,
+      "peak_rss_gib": 0.2157745361328125,
       "metadata": {}
     },
     {
       "name": "dit_load",
-      "elapsed": 1.4561509169870988,
-      "peak_rss_gib": 7.668584115803242,
+      "elapsed": 1.3122123749926686,
+      "peak_rss_gib": 7.8931121826171875,
       "metadata": {}
     },
     {
       "name": "vae_load",
-      "elapsed": 0.08697904204018414,
-      "peak_rss_gib": 7.925726247951388,
+      "elapsed": 0.05882849998306483,
+      "peak_rss_gib": 8.054428100585938,
       "metadata": {
         "tensors": "728"
       }
     },
     {
       "name": "text_encoder_load",
-      "elapsed": 0.009148208075203001,
-      "peak_rss_gib": 7.92572627030313,
+      "elapsed": 0.007845542044378817,
+      "peak_rss_gib": 8.0469970703125,
       "metadata": {
         "tensors": "713"
       }
     },
     {
       "name": "tokenizer_load",
-      "elapsed": 2.2474853330058977,
+      "elapsed": 2.1617738750064746,
       "peak_rss_gib": 7.92572627030313,
       "metadata": {}
     },
     {
       "name": "pipeline_load",
-      "elapsed": 3.843257209053263,
+      "elapsed": 3.582433499977924,
       "peak_rss_gib": 7.925726303830743,
       "metadata": {}
     },
     {
-      "name": "text_encode",
-      "elapsed": 1.8224182500271127,
-      "peak_rss_gib": 15.41837185062468,
-      "metadata": {}
-    },
-    {
       "name": "text_encoder_unload",
-      "elapsed": 0.24545704200863838,
-      "peak_rss_gib": 7.925939911976457,
+      "elapsed": 0.04137174994684756,
+      "peak_rss_gib": 7.925726281479001,
       "metadata": {}
     },
     {
       "name": "dit_step_1",
-      "elapsed": 3.8993505000835285,
-      "peak_rss_gib": 7.93277588672936,
+      "elapsed": 3.1994617499876767,
+      "peak_rss_gib": 7.932775879278779,
       "metadata": {}
     },
     {
       "name": "dit_step_2",
-      "elapsed": 3.131723374943249,
-      "peak_rss_gib": 7.93277588672936,
+      "elapsed": 3.113878999953158,
+      "peak_rss_gib": 7.932775879278779,
       "metadata": {}
     },
     {
       "name": "dit_step_3",
-      "elapsed": 3.1765246669529006,
-      "peak_rss_gib": 7.93277588672936,
+      "elapsed": 3.1578016250859946,
+      "peak_rss_gib": 7.932775879278779,
       "metadata": {}
     },
     {
       "name": "dit_step_4",
-      "elapsed": 3.1699127500178292,
-      "peak_rss_gib": 7.93277588672936,
+      "elapsed": 3.1923175000119954,
+      "peak_rss_gib": 7.932775879278779,
       "metadata": {}
     },
     {
       "name": "vae_decode",
-      "elapsed": 0.41679649997968227,
-      "peak_rss_gib": 7.9445556830614805,
+      "elapsed": 0.42463304195553064,
+      "peak_rss_gib": 7.9445556756109,
       "metadata": {}
     },
     {
       "name": "generation",
-      "elapsed": 16.133863000082783,
+      "elapsed": 13.187033166061155,
       "peak_rss_gib": 7.928717045113444,
       "metadata": {
         "prompt": "An unbranded futuristic running shoe made from white technical mesh with a vivid orange sole, floating above a pale gray studio surface, dramatic softbox lighting, premium product photography, photorealistic.",
@@ -105,16 +99,16 @@
     },
     {
       "name": "save_png",
-      "elapsed": 0.06217987509444356,
+      "elapsed": 0.06622833292931318,
       "peak_rss_gib": 7.928717045113444,
       "metadata": {}
     },
     {
       "name": "total_wall_clock",
-      "elapsed": 20.068566250032745,
+      "elapsed": 16.867392542073503,
       "peak_rss_gib": 7.928717045113444,
       "metadata": {}
     }
   ],
-  "total_wall_clock": 20.068566250032745
+  "total_wall_clock": 16.867392542073503
 }

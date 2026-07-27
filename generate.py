@@ -349,6 +349,15 @@ def main():
             prof.get_phase_rss("pipeline_load"),
         )
 
+    # --- Phase: Embedding cache (single-prompt mode) ---
+    # Create embedding cache so repeated prompts skip Qwen encoding entirely.
+    # On cache hit, peak RAM drops from ~15.4 GiB to ~8.0 GiB.
+    from mage_mlx.embedding_cache import EmbeddingCache
+    from mage_mlx.loader import resolve_text_encoder_path
+
+    embedding_cache = EmbeddingCache(model_dir=args.model)
+    te_path = resolve_text_encoder_path(args.model)
+
     # --- Phase: Generation ---
     # Print prompt header BEFORE generation starts (so it appears right before metadata)
     if report:
@@ -368,6 +377,8 @@ def main():
         guidance_scale=args.guidance,
         negative_prompt=args.negative_prompt,
         profiler=prof,
+        embedding_cache=embedding_cache,
+        te_path=te_path,
     )
     prof.stop("generation")
     if report:

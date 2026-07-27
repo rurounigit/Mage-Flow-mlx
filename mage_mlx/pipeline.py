@@ -329,6 +329,8 @@ class MageFlowPipeline:
         negative_prompt: str = " ",
         profiler: Optional["object"] = None,
         cleanup_strategy: str = "all_three",
+        embedding_cache: Optional["EmbeddingCache"] = None,
+        te_path: Optional[str] = None,
     ) -> Image.Image:
         """Generate an image from a text prompt.
 
@@ -343,12 +345,20 @@ class MageFlowPipeline:
             cleanup_strategy: Qwen cleanup strategy after text encoding.
                 One of: "unload_only", "unload+gc", "unload+cache", "all_three".
                 "all_three" is the default (current behavior).
+            embedding_cache: Optional EmbeddingCache instance. When provided,
+                text embeddings are cached on disk keyed by prompt content +
+                text-encoder checkpoint signature. On cache hit, Qwen is never
+                loaded, saving ~7.5 GiB of peak RAM.
+            te_path: Path to text_encoder.safetensors, used for cache key
+                invalidation (file size + mtime). If None, cache keys won't
+                include a checkpoint signature.
 
         Returns:
             PIL Image
         """
         if height <= 0 or width <= 0 or height % 16 or width % 16:
             raise ValueError("height and width must be positive multiples of 16")
+
         if guidance_scale < 1.0:
             raise ValueError("guidance_scale must be at least 1.0")
         if cleanup_strategy not in CLEANUP_STRATEGIES:
@@ -363,25 +373,67 @@ class MageFlowPipeline:
         lat_h, lat_w = height // 16, width // 16
 
         # 1. Text encoding via Qwen3-VL
-        if profiler:
-            profiler.start("text_encode")
-        txt_embeds, _ = self.text_encoder.encode_text_to_image(
-            prompts=[prompt],
-            tokenizer=self.tokenizer,
-            max_sequence_length=2048,
-        )
-        mx.eval(txt_embeds)
+        # Check embedding cache before encoding — on cache hit, Qwen is
+        # never materialized in Metal memory, saving ~7.5 GiB peak RAM.
+        cached_pos = None
+        pos_key = None
+        if embedding_cache is not None:
+            pos_key = embedding_cache.make_key(
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                te_path=te_path,
+            )
+            cached_pos = embedding_cache.get(pos_key)
 
-        neg_txt_embeds = None
-        if guidance_scale > 1.0:
-            neg_txt_embeds, _ = self.text_encoder.encode_text_to_image(
-                prompts=[negative_prompt],
+        cached_neg = None
+        neg_key = None
+        if guidance_scale > 1.0 and embedding_cache is not None:
+            neg_key = embedding_cache.make_key(
+                prompt=negative_prompt,
+                negative_prompt=" ",
+                te_path=te_path,
+            )
+            cached_neg = embedding_cache.get(neg_key)
+
+        # Only start text_encode phase if we actually need to encode
+        need_encode = cached_pos is None or (
+            guidance_scale > 1.0 and cached_neg is None
+        )
+
+        if need_encode and profiler:
+            profiler.start("text_encode")
+
+        if cached_pos is not None:
+            txt_embeds = cached_pos
+            print("  Cache HIT — skipping Qwen encode")
+        else:
+            txt_embeds, _ = self.text_encoder.encode_text_to_image(
+                prompts=[prompt],
                 tokenizer=self.tokenizer,
                 max_sequence_length=2048,
             )
-            mx.eval(neg_txt_embeds)
-        if profiler:
+            mx.eval(txt_embeds)
+            if embedding_cache is not None and pos_key is not None:
+                embedding_cache.put(pos_key, txt_embeds)
+
+        neg_txt_embeds = None
+        if guidance_scale > 1.0:
+            if cached_neg is not None:
+                neg_txt_embeds = cached_neg
+            else:
+                neg_txt_embeds, _ = self.text_encoder.encode_text_to_image(
+                    prompts=[negative_prompt],
+                    tokenizer=self.tokenizer,
+                    max_sequence_length=2048,
+                )
+                mx.eval(neg_txt_embeds)
+                if embedding_cache is not None and neg_key is not None:
+                    embedding_cache.put(neg_key, neg_txt_embeds)
+
+        if need_encode and profiler:
             profiler.stop("text_encode")
+            cache_label = "HIT" if cached_pos is not None else "MISS"
+            profiler.set_metadata("text_encode", "cache", cache_label)
 
         # Qwen is only needed for prompt encoding. Releasing its ~8.9 GB BF16
         # weights leaves ample unified memory for DiT activations at 1024².
