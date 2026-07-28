@@ -2,8 +2,8 @@
   "metadata": {
     "model": "microsoft/Mage-Flow-Turbo",
     "base_model": "MageFlow",
-    "generation_time_seconds": 19.871665667044,
-    "created_at": "2026-07-28T20:26:50.747544",
+    "generation_time_seconds": 19.55641495785676,
+    "created_at": "2026-07-28T20:57:49.282528",
     "image_path": null,
     "image_paths": null,
     "image_strength": null,
@@ -12,15 +12,15 @@
   "phases": [
     {
       "name": "python_startup",
-      "elapsed": 3.237486816942692e-05,
-      "peak_rss_gib": 0.2165985107421875,
+      "elapsed": 3.1084055081009865e-05,
+      "peak_rss_gib": 0.2168121337890625,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "text_encoder_load",
-      "elapsed": 0.00926266610622406,
-      "peak_rss_gib": 0.22833251953125,
+      "elapsed": 0.008574791951104999,
+      "peak_rss_gib": 0.2285003662109375,
       "metadata": {
         "tensors": "713"
       },
@@ -28,35 +28,35 @@
     },
     {
       "name": "tokenizer_load",
-      "elapsed": 2.359808708075434,
-      "peak_rss_gib": 0.442138671875,
+      "elapsed": 2.1607938329689205,
+      "peak_rss_gib": 0.4413909912109375,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "pipeline_load",
-      "elapsed": 2.3929314580745995,
-      "peak_rss_gib": 0.442138671875,
+      "elapsed": 2.189564999891445,
+      "peak_rss_gib": 0.4413909912109375,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "text_encoder_unload",
-      "elapsed": 0.042960625141859055,
-      "peak_rss_gib": 0.442230224609375,
+      "elapsed": 0.04908700007945299,
+      "peak_rss_gib": 0.441497802734375,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_load",
-      "elapsed": 2.252103792037815,
+      "elapsed": 1.866382583975792,
       "peak_rss_gib": 7.668584149330854,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_load",
-      "elapsed": 0.06981749995611608,
+      "elapsed": 0.06696008401922882,
       "peak_rss_gib": 7.925726281479001,
       "metadata": {
         "tensors": "728"
@@ -65,42 +65,42 @@
     },
     {
       "name": "dit_step_1",
-      "elapsed": 3.1501700000371784,
+      "elapsed": 3.264968208037317,
       "peak_rss_gib": 7.93277589045465,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_2",
-      "elapsed": 3.158490125089884,
+      "elapsed": 3.162550040986389,
       "peak_rss_gib": 7.93277589045465,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_3",
-      "elapsed": 3.175650666002184,
+      "elapsed": 3.209843291901052,
       "peak_rss_gib": 7.93277589045465,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_4",
-      "elapsed": 3.1472075839992613,
+      "elapsed": 3.151503625093028,
       "peak_rss_gib": 7.93277589045465,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_decode",
-      "elapsed": 2.2116602081805468,
+      "elapsed": 2.394787459168583,
       "peak_rss_gib": 7.944555686786771,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "generation",
-      "elapsed": 17.37898145802319,
+      "elapsed": 17.26194079197012,
       "peak_rss_gib": 7.92893067933619,
       "metadata": {
         "prompt": "An unbranded futuristic running shoe made from white technical mesh with a vivid orange sole, floating above a pale gray studio surface, dramatic softbox lighting, premium product photography, photorealistic.",
@@ -112,24 +112,24 @@
     },
     {
       "name": "save_png",
-      "elapsed": 0.06894320785067976,
+      "elapsed": 0.07672975002788007,
       "peak_rss_gib": 7.92893067933619,
       "metadata": {},
       "saved_file": "test_10_shoe.png"
     },
     {
       "name": "total_wall_clock",
-      "elapsed": 19.871665667044,
+      "elapsed": 19.55641495785676,
       "peak_rss_gib": 7.92893067933619,
       "metadata": {},
       "saved_file": null
     }
   ],
-  "total_wall_clock": 19.871665667044,
+  "total_wall_clock": 19.55641495785676,
   "overview": [
     {
       "index": 1,
-      "time": 17.37898145802319,
+      "time": 17.26194079197012,
       "peak_rss_gib": 7.944555686786771,
       "resolution": "1024x1024",
       "steps": 4,
@@ -137,10 +137,10 @@
     }
   ],
   "summary": {
-    "total_time": 19.871665667044,
+    "total_time": 19.55641495785676,
     "peak_ram": 7.944555686786771,
     "prompts_count": 1,
-    "overhead": 2.4926842090208083
+    "overhead": 2.2944741658866405
   },
   "log": [
     "======================================================================",

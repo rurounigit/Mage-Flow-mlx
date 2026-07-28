@@ -328,8 +328,14 @@ class Profiler:
         # ── Phase table ──────────────────────────────────────────────
         lines.append("## Phases")
         lines.append("")
-        lines.append("| Phase | Time (s) | Peak RSS (GiB) | Saved File | Metadata |")
-        lines.append("|-------|----------|----------------|------------|----------|")
+        # Check if any phase has a saved_file (to decide whether to show the column)
+        has_saved_files = any(rec.saved_file for rec in self._records)
+        if has_saved_files:
+            lines.append("| Phase | Time (s) | Peak RSS (GiB) | Saved File | Metadata |")
+            lines.append("|-------|----------|----------------|------------|----------|")
+        else:
+            lines.append("| Phase | Time (s) | Peak RSS (GiB) | Metadata |")
+            lines.append("|-------|----------|----------------|----------|")
 
         for rec in self._records:
             if rec.name == "total_wall_clock":
@@ -337,10 +343,22 @@ class Profiler:
             else:
                 rss_str = f"{rec.peak_rss_gib:.2f}" if rec.peak_rss_gib is not None else "N/A"
             saved_str = rec.saved_file or ""
-            lines.append(f"| {rec.name} | {rec.elapsed:.4f} | {rss_str} | {saved_str} | |")
             if rec.metadata:
+                # Embed metadata inside the table cell (comma-separated key=value pairs)
+                # Truncate very long values (e.g. prompts) to keep the table readable
+                parts = []
                 for k, v in rec.metadata.items():
-                    lines.append(f"{k}={v}")
+                    v_str = str(v)
+                    if len(v_str) > 80:
+                        v_str = v_str[:77] + "..."
+                    parts.append(f"{k}={v_str}")
+                metadata_str = ", ".join(parts)
+            else:
+                metadata_str = ""
+            if has_saved_files:
+                lines.append(f"| {rec.name} | {rec.elapsed:.4f} | {rss_str} | {saved_str} | {metadata_str} |")
+            else:
+                lines.append(f"| {rec.name} | {rec.elapsed:.4f} | {rss_str} | {metadata_str} |")
 
         has_total = any(r.name == "total_wall_clock" for r in self._records)
         if not has_total:
