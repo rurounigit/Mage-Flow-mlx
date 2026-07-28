@@ -265,8 +265,14 @@ class Profiler:
             overview: Optional list of per-prompt overview dicts.
             summary: Optional summary dict (total_time, peak_ram, etc.).
         """
+        # Round timing values in metadata to 1 decimal place
+        rounded_metadata = dict(metadata or {})
+        if "generation_time_seconds" in rounded_metadata and rounded_metadata["generation_time_seconds"] is not None:
+            rounded_metadata["generation_time_seconds"] = round(rounded_metadata["generation_time_seconds"], 1)
+        if "peak_memory_gib" in rounded_metadata and rounded_metadata["peak_memory_gib"] is not None:
+            rounded_metadata["peak_memory_gib"] = round(rounded_metadata["peak_memory_gib"], 2)
         data = {
-            "metadata": metadata or {},
+            "metadata": rounded_metadata,
             "phases": [
                 {
                     "name": rec.name,
@@ -345,29 +351,30 @@ class Profiler:
             saved_str = rec.saved_file or ""
             if rec.metadata:
                 # Embed metadata inside the table cell (comma-separated key=value pairs)
-                # Truncate very long values (e.g. prompts) to keep the table readable
                 parts = []
                 for k, v in rec.metadata.items():
                     v_str = str(v)
-                    if len(v_str) > 80:
-                        v_str = v_str[:77] + "..."
                     parts.append(f"{k}={v_str}")
                 metadata_str = ", ".join(parts)
             else:
                 metadata_str = ""
             if has_saved_files:
-                lines.append(f"| {rec.name} | {rec.elapsed:.4f} | {rss_str} | {saved_str} | {metadata_str} |")
+                lines.append(f"| {rec.name} | {rec.elapsed:.1f} | {rss_str} | {saved_str} | {metadata_str} |")
             else:
-                lines.append(f"| {rec.name} | {rec.elapsed:.4f} | {rss_str} | {metadata_str} |")
+                lines.append(f"| {rec.name} | {rec.elapsed:.1f} | {rss_str} | {metadata_str} |")
 
         has_total = any(r.name == "total_wall_clock" for r in self._records)
         if not has_total:
-            lines.append("|-------|----------|----------------|------------|----------|")
-            lines.append(
-                f"| **Sum of all phases** | **{sum(r.elapsed for r in self._records):.4f}** | | | |"
-            )
-        lines.append("")
-        lines.append("*Note: phase times are nested; child phases are subsets of parent phases.*")
+            if has_saved_files:
+                lines.append("|-------|----------|----------------|------------|----------|")
+                lines.append(
+                    f"| **Sum of all phases** | **{sum(r.elapsed for r in self._records):.1f}** | | | |"
+                )
+            else:
+                lines.append("|-------|----------|----------------|----------|")
+                lines.append(
+                    f"| **Sum of all phases** | **{sum(r.elapsed for r in self._records):.1f}** | | |"
+                )
         lines.append("")
 
         # ── Summary section ──────────────────────────────────────────
@@ -379,7 +386,7 @@ class Profiler:
             total_time = summary.get("total_time", 0.0)
             peak_ram = summary.get("peak_ram", 0.0)
             prompts_count = summary.get("prompts_count", 0)
-            lines.append(f"| Total time | {total_time:.4f} |")
+            lines.append(f"| Total time | {total_time:.1f} |")
             lines.append(f"| Peak RAM | {peak_ram:.2f} |")
             lines.append(f"| Prompts | {prompts_count} |")
             lines.append("")
@@ -393,7 +400,7 @@ class Profiler:
             for row in overview:
                 idx = row.get("index", "—")
                 t = row.get("time")
-                t_str = f"{t:.4f}" if t is not None else "—"
+                t_str = f"{t:.1f}" if t is not None else "—"
                 r = row.get("peak_rss_gib")
                 r_str = f"{r:.2f}" if r is not None else "—"
                 res = row.get("resolution", "—")
@@ -406,12 +413,12 @@ class Profiler:
                 te_time = summary["text_encode_time"]
                 te_ram = summary.get("text_encode_ram")
                 te_ram_str = f"{te_ram:.2f}" if te_ram is not None else "—"
-                lines.append(f"| — | {te_time:.4f} | {te_ram_str} | — | — | text encode / decode |")
+                lines.append(f"| — | {te_time:.1f} | {te_ram_str} | — | — | text encode / decode |")
 
             # Overhead row
             if summary and summary.get("overhead", 0) > 0:
                 oh = summary["overhead"]
-                lines.append(f"| — | {oh:.4f} | — | — | — | overhead (load + encode + decode) |")
+                lines.append(f"| — | {oh:.1f} | — | — | — | overhead (load + encode + decode) |")
             lines.append("")
 
         # ── Run Metadata block ──────────────────────────────────────
@@ -421,6 +428,10 @@ class Profiler:
             lines.append("| Field | Value |")
             lines.append("|-------|-------|")
             for key, value in metadata.items():
+                if key == "generation_time_seconds" and value is not None:
+                    value = round(value, 1)
+                elif key == "peak_memory_gib" and value is not None:
+                    value = round(value, 2)
                 lines.append(f"| {key} | {value} |")
             lines.append("")
 
@@ -669,9 +680,6 @@ class LiveReport:
             self.profiler.log("=" * 70)
             self.profiler.log(f"  {self.title}")
             self.profiler.log("=" * 70)
-            if self.verbose:
-                self.profiler.log(f"  {'Phase':<36} {'Time':>14}   {'Peak RAM':>10}")
-                self.profiler.log(f"  {'─' * 62}")
 
     # ── progress bar (non-verbose mode) ──
     def progress_bar(self, name: str) -> None:
@@ -994,7 +1002,7 @@ class LiveReport:
         for key, value in metadata.items():
             if key == "generation_time_seconds":
                 print(f"  {key}: {_colorize_total(value)}")
-            elif key == "peak_memory_gib":
+            elif key == "peak_memory_gib" and value is not None:
                 print(f"  {key}: {_colorize_ram(value)}")
             else:
                 print(f"  {key}: {value}")

@@ -552,12 +552,8 @@ class MageFlowPipeline:
             )
             cached_neg = embedding_cache.get(neg_key)
 
-        # Only start text_encode phase if we actually need to encode
-        need_encode = cached_pos is None or (
-            guidance_scale > 1.0 and cached_neg is None
-        )
-
-        if need_encode and profiler:
+        # Always start text_encode phase (even on cache hit, to record it in md/json)
+        if profiler:
             profiler.start("text_encode")
 
         if cached_pos is not None:
@@ -587,7 +583,7 @@ class MageFlowPipeline:
                 if embedding_cache is not None and neg_key is not None:
                     embedding_cache.put(neg_key, neg_txt_embeds)
 
-        if need_encode and profiler:
+        if profiler:
             profiler.stop("text_encode")
             cache_label = "HIT" if cached_pos is not None else "MISS"
             profiler.set_metadata("text_encode", "cache", cache_label)

@@ -465,47 +465,37 @@ def main():
         )
         cached_neg = embedding_cache.get(neg_key)
 
-    need_encode = cached_pos is None or (
-        args.guidance > 1.0 and cached_neg is None
-    )
+    # Always start text_encode phase (even on cache hit, to record it in md/json)
+    prof.start("text_encode")
+    if cached_pos is not None:
+        txt_embeds = cached_pos
+        print("  Cache HIT — skipping Qwen encode")
+    else:
+        txt_embeds, _ = pipeline.text_encoder.encode_text_to_image(
+            prompts=[args.prompt],
+            tokenizer=pipeline.tokenizer,
+            max_sequence_length=2048,
+        )
+        mx.eval(txt_embeds)
+        if pos_key is not None:
+            embedding_cache.put(pos_key, txt_embeds)
 
-    if need_encode:
-        prof.start("text_encode")
-        if cached_pos is not None:
-            txt_embeds = cached_pos
-            print("  Cache HIT — skipping Qwen encode")
+    neg_txt_embeds = None
+    if args.guidance > 1.0:
+        if cached_neg is not None:
+            neg_txt_embeds = cached_neg
         else:
-            txt_embeds, _ = pipeline.text_encoder.encode_text_to_image(
-                prompts=[args.prompt],
+            neg_txt_embeds, _ = pipeline.text_encoder.encode_text_to_image(
+                prompts=[args.negative_prompt],
                 tokenizer=pipeline.tokenizer,
                 max_sequence_length=2048,
             )
-            mx.eval(txt_embeds)
-            if pos_key is not None:
-                embedding_cache.put(pos_key, txt_embeds)
-
-        neg_txt_embeds = None
-        if args.guidance > 1.0:
-            if cached_neg is not None:
-                neg_txt_embeds = cached_neg
-            else:
-                neg_txt_embeds, _ = pipeline.text_encoder.encode_text_to_image(
-                    prompts=[args.negative_prompt],
-                    tokenizer=pipeline.tokenizer,
-                    max_sequence_length=2048,
-                )
-                mx.eval(neg_txt_embeds)
-                if neg_key is not None:
-                    embedding_cache.put(neg_key, neg_txt_embeds)
-        prof.stop("text_encode")
-        cache_label = "HIT" if cached_pos is not None else "MISS"
-        prof.set_metadata("text_encode", "cache", cache_label)
-    else:
-        txt_embeds = cached_pos
-        neg_txt_embeds = cached_neg
-        if verbose:
-            print("  Cache HIT — skipping Qwen encode")
-        prof.set_metadata("generation", "cache", "HIT")
+            mx.eval(neg_txt_embeds)
+            if neg_key is not None:
+                embedding_cache.put(neg_key, neg_txt_embeds)
+    prof.stop("text_encode")
+    cache_label = "HIT" if cached_pos is not None else "MISS"
+    prof.set_metadata("text_encode", "cache", cache_label)
 
     # Unload Qwen — it's only needed for prompt encoding
     prof.start("text_encoder_unload")

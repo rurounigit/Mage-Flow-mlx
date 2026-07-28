@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "test_10_shoe_edited.md",
+                "file": "test_10_shoe.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "test_10_shoe_edited"
+              "title": "test_10_shoe"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "test_10_shoe_edited.md",
+                "file": "test_10_shoe.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for test_10_shoe_edited"
+              "title": "Backlinks for test_10_shoe"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "test_10_shoe_edited.md",
+                "file": "test_10_shoe.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from test_10_shoe_edited"
+              "title": "Outgoing links from test_10_shoe"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "test_10_shoe_edited.md",
+                "file": "test_10_shoe.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of test_10_shoe_edited"
+              "title": "Outline of test_10_shoe"
             }
           }
         ]
@@ -185,9 +185,12 @@
   },
   "active": "524c3f94795a19ce",
   "lastOpenFiles": [
+    "test_10_shoe.png",
+    "test_10_shoe_edited.md",
+    "models/microsoft_Mage-Flow-Turbo/embedding_cache/e99f52d2aa5ddb2d1508a97283eac60ba79df5478e5867318413ba375af13b13.json",
+    "models/microsoft_Mage-Flow-Turbo/embedding_cache/e99f52d2aa5ddb2d1508a97283eac60ba79df5478e5867318413ba375af13b13.npy",
     "test_prompts.md",
     "test_10_shoe_edited.png",
-    "test_10_shoe_edited.md",
     "test_10_shoe.md"
   ]
 }
