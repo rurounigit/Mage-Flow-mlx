@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import textwrap
 import time
@@ -420,6 +421,37 @@ class _C:
     GRAY    = "\033[90m"
 
 
+# ── Column widths for the live report table ────────────────────────────────
+# Phase name is narrower (36 vs 42) to make room for a wider time column (14
+# vs 8) that can accommodate "lazy loading" (13 chars) without pushing the
+# RAM column out of alignment. Total width stays 62 chars.
+_PHASE_WIDTH = 36
+_TIME_WIDTH = 14
+_RAM_WIDTH = 10
+
+# Regex to strip ANSI escape codes for visible-width calculations
+_ANSI_RE = re.compile(r'\033\[[0-9;]*m')
+
+
+def _visible_len(s: str) -> int:
+    """Return the visible length of a string, excluding ANSI escape codes."""
+    return len(_ANSI_RE.sub('', s))
+
+
+def _ansi_rjust(s: str, width: int, color: str = "") -> str:
+    """Right-justify visible text to *width*, then optionally wrap in ANSI color.
+
+    Unlike Python's built-in ``{:>width}`` format, this function only counts
+    visible characters when calculating padding, so ANSI color codes don't
+    push subsequent columns out of alignment.
+    """
+    pad = max(0, width - len(s))
+    result = ' ' * pad + s
+    if color:
+        result = f"{color}{result}{_C.RESET}"
+    return result
+
+
 def _fmt_time(s: float) -> str:
     """Format seconds with one decimal place."""
     return f"{s:.1f}s"
@@ -507,7 +539,7 @@ class LiveReport:
         print(f"{_C.BOLD}{_C.CYAN}{'=' * 70}{_C.RESET}")
         print(f"{_C.BOLD}{_C.CYAN}  {self.title}{_C.RESET}")
         print(f"{_C.BOLD}{_C.CYAN}{'=' * 70}{_C.RESET}")
-        print(f"{_C.DIM}  {'Phase':<42} {'Time':>8}   {'Peak RAM':>10}{_C.RESET}")
+        print(f"{_C.DIM}  {'Phase':<36} {'Time':>14}   {'Peak RAM':>10}{_C.RESET}")
         print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
 
     # ── phase lifecycle ──
@@ -515,7 +547,7 @@ class LiveReport:
         """Called when a phase starts — prints a live indicator."""
         row = _PhaseRow(name=name)
         self.phases.append(row)
-        print(f"{_C.GRAY}  ▸ {name:<40}{_C.RESET}", end="", flush=True)
+        print(f"{_C.GRAY}  ▸ {name:<34}{_C.RESET}", end="", flush=True)
 
     def stop_phase(
         self,
@@ -554,12 +586,15 @@ class LiveReport:
 
         # Real-time: no time coloring (don't know min/max yet)
         if loading_mode is not None:
-            time_str = f"{_C.YELLOW}{loading_mode}{_C.RESET}"
+            time_str = _ansi_rjust(loading_mode, _TIME_WIDTH, _C.YELLOW)
         elif elapsed is not None:
-            time_str = _fmt_time(elapsed)
+            time_str = _ansi_rjust(_fmt_time(elapsed), _TIME_WIDTH)
         else:
-            time_str = f"{_C.GRAY}—{_C.RESET}"
-        ram_str = _colorize_ram(peak_rss_gib) if peak_rss_gib is not None else f"{_C.GRAY}—{_C.RESET}"
+            time_str = _ansi_rjust("—", _TIME_WIDTH, _C.GRAY)
+        if peak_rss_gib is not None:
+            ram_str = _ansi_rjust(f"{peak_rss_gib:.2f}GiB", _RAM_WIDTH, _C.CYAN)
+        else:
+            ram_str = _ansi_rjust("—", _RAM_WIDTH, _C.GRAY)
 
         # Print empty line before phase for visual separation
         # Block phases form a group with no empty lines between them:
@@ -581,7 +616,7 @@ class LiveReport:
             # Empty line before non-block phases (always, gives separation after blocks)
             print()
 
-        print(f"  {name:<42} {time_str:>8}   {ram_str:>10}", end="")
+        print(f"  {name:<36} {time_str}   {ram_str}", end="")
         if saved_file:
             print(f"   {_C.GREEN}→ {saved_file}{_C.RESET}")
         else:
@@ -687,8 +722,18 @@ class LiveReport:
         self.prompts.append(pr)
 
     # ── final summary ──
-    def print_summary(self, total_time: float, peak_ram: float) -> None:
-        """Print the final summary section with per-prompt results table."""
+    def print_summary(self, total_time: float, peak_ram: float, show_text_encode: bool = False) -> None:
+        """Print the final summary section with per-prompt results table.
+
+        Args:
+            total_time: Total wall clock time in seconds.
+            peak_ram: Peak RAM in GiB.
+            show_text_encode: If True (worker mode), show a separate
+                "text encode / decode" row summing text_encode,
+                text_encoder_unload, dit_load, and vae_load phases.
+                The overhead row then reflects only the leftover
+                (startup + save) time.
+        """
         print()
         print(f"{_C.BOLD}{_C.CYAN}{'─' * 70}{_C.RESET}")
         print(f"{_C.BOLD}  Summary{_C.RESET}")
@@ -701,9 +746,9 @@ class LiveReport:
         print(f"  {_C.BOLD}Prompts:{_C.RESET}        {len(self.prompts)}")
         print()
 
-        # Per-prompt table
+        # Overview table
         if self.prompts:
-            print(f"{_C.BOLD}  Per-Prompt Results:{_C.RESET}")
+            print(f"{_C.BOLD}  Overview:{_C.RESET}")
             print(f"{_C.DIM}  {'#':>3}  {'Time':>8}   {'Peak RAM':>10}   {'Resolution':>12}   {'Steps':>5}   File{_C.RESET}")
             print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
             # Use generation times only for relative coloring
@@ -723,6 +768,53 @@ class LiveReport:
                 print(
                     f"  {p.index:>3}  {t_str:>8}   {r_str:>10}   "
                     f"{p.resolution:>12}   {p.steps:>5}   {file_str}"
+                )
+
+            # In worker mode, show a "text encode / decode" row that sums
+            # the text_encode*, text_encoder_unload, dit_load, and vae_load
+            # phases. This highlights the worker's architecture: Qwen is
+            # loaded once, all prompts are encoded, then Qwen is unloaded,
+            # and only then are DiT/VAE loaded.
+            sum_gen = sum(p.generation_time for p in self.prompts if p.generation_time is not None)
+            text_encode_time = 0.0
+            text_encode_ram: Optional[float] = None
+            if show_text_encode:
+                for ph in self.phases:
+                    if ph.elapsed is None:
+                        continue
+                    if (
+                        ph.name.startswith("text_encode")
+                        or ph.name == "text_encoder_unload"
+                        or ph.name == "dit_load"
+                        or ph.name == "vae_load"
+                    ):
+                        text_encode_time += ph.elapsed
+                        if ph.peak_rss_gib is not None:
+                            if text_encode_ram is None or ph.peak_rss_gib > text_encode_ram:
+                                text_encode_ram = ph.peak_rss_gib
+                if text_encode_time > 0:
+                    print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
+                    te_str = _colorize_total(text_encode_time)
+                    if text_encode_ram is not None:
+                        te_ram_str = _colorize_ram(text_encode_ram)
+                    else:
+                        te_ram_str = f"{_C.GRAY}—{_C.RESET}"
+                    print(
+                        f"  {'—':>3}  {te_str:>8}   {te_ram_str:>10}   "
+                        f"{'—':>12}   {'—':>5}   {_C.GRAY}text encode / decode{_C.RESET}"
+                    )
+
+            # Overhead row: total wall clock minus sum of generation times
+            # (and minus text encode/decode if shown)
+            overhead = total_time - sum_gen
+            if show_text_encode:
+                overhead -= text_encode_time
+            if overhead > 0:
+                print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
+                oh_str = _colorize_total(overhead)
+                print(
+                    f"  {'—':>3}  {oh_str:>8}   {'—':>10}   "
+                    f"{'—':>12}   {'—':>5}   {_C.GRAY}overhead (load + encode + decode){_C.RESET}"
                 )
             print()
 

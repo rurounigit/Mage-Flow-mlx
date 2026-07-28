@@ -276,6 +276,7 @@ def main():
             report.print_summary(
                 total_time=prof.get_elapsed("total_wall_clock") or 0.0,
                 peak_ram=peak_ram or 0.0,
+                show_text_encode=True,
             )
             report.print_run_metadata(metadata or {})
             base_path = os.path.splitext(args.worker)[0]
