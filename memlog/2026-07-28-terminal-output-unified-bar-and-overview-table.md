@@ -49,3 +49,8 @@ Unified the terminal output across all three modes (single generation, edit, wor
   DiT generation steps (dit_step_1-4, vae_decode) never reached `progress_bar()`
 - Moved callback setup outside `if verbose:` so it runs in ALL modes
 - Single mode now shows all 16 events updating on ONE SINGLE BAR
+
+## Additional Fix: Worker Mode "Metadata saved" Line
+- The "Metadata saved to ..." line was appearing in worker mode without `--metadata`
+- Gated only the "Metadata saved" print behind `if args.metadata`
+- The Run Metadata block remains visible in all modes (only the file-save confirmation is suppressed)
