@@ -526,8 +526,9 @@ class LiveReport:
     min/max are not known until all phases complete.
     """
 
-    def __init__(self, title: str = "Mage-Flow MLX"):
+    def __init__(self, title: str = "Mage-Flow MLX", verbose: bool = True):
         self.title = title
+        self.verbose = verbose
         self.phases: list[_PhaseRow] = []
         self.prompts: list[_PromptRow] = []
         self._phase_times: list[float] = []  # for relative color scaling
@@ -539,15 +540,27 @@ class LiveReport:
         print(f"{_C.BOLD}{_C.CYAN}{'=' * 70}{_C.RESET}")
         print(f"{_C.BOLD}{_C.CYAN}  {self.title}{_C.RESET}")
         print(f"{_C.BOLD}{_C.CYAN}{'=' * 70}{_C.RESET}")
-        print(f"{_C.DIM}  {'Phase':<36} {'Time':>14}   {'Peak RAM':>10}{_C.RESET}")
-        print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
+        if self.verbose:
+            print(f"{_C.DIM}  {'Phase':<36} {'Time':>14}   {'Peak RAM':>10}{_C.RESET}")
+            print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
+
+    # ── progress bar (non-verbose mode) ──
+    def progress_bar(self, name: str) -> None:
+        """Print a single in-place progress bar using carriage return.
+
+        Overwrites itself on the same line using \\033[K to clear line.
+        """
+        count = len(self.phases)
+        bar = '█' * count
+        print(f"\r\033[K  [{bar}] {count} events — {name}", end="", flush=True)
 
     # ── phase lifecycle ──
     def start_phase(self, name: str) -> None:
         """Called when a phase starts — prints a live indicator."""
         row = _PhaseRow(name=name)
         self.phases.append(row)
-        print(f"{_C.GRAY}  ▸ {name:<34}{_C.RESET}", end="", flush=True)
+        if self.verbose:
+            print(f"{_C.GRAY}  ▸ {name:<34}{_C.RESET}", end="", flush=True)
 
     def stop_phase(
         self,
@@ -587,6 +600,10 @@ class LiveReport:
 
         if elapsed is not None:
             self._phase_times.append(elapsed)
+
+        if not self.verbose:
+            self.progress_bar(name)
+            return
 
         # Real-time: no time coloring (don't know min/max yet)
         if loading_mode is not None:
@@ -745,6 +762,8 @@ class LiveReport:
                 The overhead row then reflects only the leftover
                 (startup + save) time.
         """
+        if not self.verbose:
+            print()  # Final newline to complete the \r progress bar
         print()
         print(f"{_C.BOLD}{_C.CYAN}{'─' * 70}{_C.RESET}")
         print(f"{_C.BOLD}  Summary{_C.RESET}")

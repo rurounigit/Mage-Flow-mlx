@@ -1,0 +1,122 @@
+{
+  "metadata": {
+    "model": "microsoft/Mage-Flow-Turbo",
+    "base_model": "MageFlow",
+    "generation_time_seconds": 19.995710958959535,
+    "created_at": "2026-07-28T16:22:38.315042",
+    "image_path": null,
+    "image_paths": null,
+    "image_strength": null,
+    "peak_memory_gib": 7.944372588768601
+  },
+  "phases": [
+    {
+      "name": "python_startup",
+      "elapsed": 2.7291011065244675e-05,
+      "peak_rss_gib": 0.2162628173828125,
+      "metadata": {}
+    },
+    {
+      "name": "text_encoder_load",
+      "elapsed": 0.00893229094799608,
+      "peak_rss_gib": 0.2279052734375,
+      "metadata": {
+        "tensors": "713"
+      }
+    },
+    {
+      "name": "tokenizer_load",
+      "elapsed": 2.244175749947317,
+      "peak_rss_gib": 0.4415435791015625,
+      "metadata": {}
+    },
+    {
+      "name": "pipeline_load",
+      "elapsed": 2.272774792043492,
+      "peak_rss_gib": 0.4415435791015625,
+      "metadata": {}
+    },
+    {
+      "name": "text_encode",
+      "elapsed": 1.4251502499682829,
+      "peak_rss_gib": 7.6614990234375,
+      "metadata": {
+        "cache": "MISS"
+      }
+    },
+    {
+      "name": "text_encoder_unload",
+      "elapsed": 0.08788829098921269,
+      "peak_rss_gib": 1.3565673828125,
+      "metadata": {}
+    },
+    {
+      "name": "dit_load",
+      "elapsed": 1.3342592499684542,
+      "peak_rss_gib": 7.66861467435956,
+      "metadata": {}
+    },
+    {
+      "name": "vae_load",
+      "elapsed": 0.06135333294514567,
+      "peak_rss_gib": 7.925756806507707,
+      "metadata": {
+        "tensors": "728"
+      }
+    },
+    {
+      "name": "dit_step_1",
+      "elapsed": 3.13119404099416,
+      "peak_rss_gib": 7.9325927924364805,
+      "metadata": {}
+    },
+    {
+      "name": "dit_step_2",
+      "elapsed": 3.1531407909933478,
+      "peak_rss_gib": 7.9325927924364805,
+      "metadata": {}
+    },
+    {
+      "name": "dit_step_3",
+      "elapsed": 3.0937939579598606,
+      "peak_rss_gib": 7.9325927924364805,
+      "metadata": {}
+    },
+    {
+      "name": "dit_step_4",
+      "elapsed": 3.1338201670441777,
+      "peak_rss_gib": 7.9325927924364805,
+      "metadata": {}
+    },
+    {
+      "name": "vae_decode",
+      "elapsed": 2.1067285829922184,
+      "peak_rss_gib": 7.944372588768601,
+      "metadata": {}
+    },
+    {
+      "name": "generation",
+      "elapsed": 17.61957145796623,
+      "peak_rss_gib": 7.928747581318021,
+      "metadata": {
+        "prompt": "test",
+        "resolution": "1024x1024",
+        "steps": "4",
+        "quantize": "None"
+      }
+    },
+    {
+      "name": "save_png",
+      "elapsed": 0.07646404101978987,
+      "peak_rss_gib": 7.928747581318021,
+      "metadata": {}
+    },
+    {
+      "name": "total_wall_clock",
+      "elapsed": 19.995710958959535,
+      "peak_rss_gib": 7.928747581318021,
+      "metadata": {}
+    }
+  ],
+  "total_wall_clock": 19.995710958959535
+}

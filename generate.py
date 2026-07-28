@@ -178,58 +178,59 @@ def main():
     # --- Phase: Python/import startup ---
     from mage_mlx.profiler import Profiler, LiveReport, _C
 
-    prof = Profiler(enabled=args.metadata, track_memory=args.metadata)
+    prof = Profiler(enabled=True, track_memory=True)
 
     # Create LiveReport for real-time terminal output
-    if args.metadata:
-        report = LiveReport(title="Mage-Flow MLX")
-        # Real-time callback: report sub-phases as they complete
-        # Phases that are explicitly reported via stop_phase (skip in callback)
-        # Use exact names for numbered phases, prefixes for generic ones
-        # Phases reported explicitly via report.stop_phase (skip in callback).
-        # "generation" and "save_png" are single-mode names; worker uses generation_N / save_N.
-        _EXPLICIT_EXACT = {
-            "total_wall_clock",
-            "python_startup",
-            "edit",
-            "pipeline_load",
-            "generation",
-            "save_png",
-            "dit_load",
-            "vae_load",
-        }
-        # Phases that are explicitly reported via report.stop_phase (skip in callback).
-        # "text_encoder_unload" is NOT in this list — it's profiled inside
-        # MageFlowPipeline.generate() but never explicitly reported in single/edit
-        # mode, so it must go through the callback. Worker handles it explicitly.
-        _EXPLICIT_PREFIXES = (
-            "pipeline_load",
-            "text_encode_",
-            "generation_",
-            "save_",
-        )
-        def _on_phase_complete(name, elapsed, rss):
-            if name in _EXPLICIT_EXACT or any(name.startswith(p) for p in _EXPLICIT_PREFIXES):
-                return  # handled explicitly via stop_phase
-            # text_encoder_load is lazy — weights load during text_encode,
-            # so the phase time is always ~0.0s. Show "lazy loading" instead.
-            loading_mode = "lazy loading" if name == "text_encoder_load" else None
-            report.stop_phase(name, elapsed or 0.0, rss, loading_mode=loading_mode)
-        prof.on_phase_complete = _on_phase_complete
-    else:
-        report = None
+    verbose = bool(args.metadata)
+    report = LiveReport(title="Mage-Flow MLX", verbose=verbose)
+
+    # Real-time callback: report sub-phases as they complete
+    # Phases that are explicitly reported via stop_phase (skip in callback)
+    # Use exact names for numbered phases, prefixes for generic ones
+    # Phases reported explicitly via report.stop_phase (skip in callback).
+    # "generation" and "save_png" are single-mode names; worker uses generation_N / save_N.
+    _EXPLICIT_EXACT = {
+        "total_wall_clock",
+        "python_startup",
+        "edit",
+        "pipeline_load",
+        "generation",
+        "save_png",
+        "dit_load",
+        "vae_load",
+    }
+    # Phases that are explicitly reported via report.stop_phase (skip in callback).
+    # "text_encoder_unload" is NOT in this list — it's profiled inside
+    # MageFlowPipeline.generate() but never explicitly reported in single/edit
+    # mode, so it must go through the callback. Worker handles it explicitly.
+    _EXPLICIT_PREFIXES = (
+        "pipeline_load",
+        "text_encode_",
+        "generation_",
+        "save_",
+    )
+    def _on_phase_complete(name, elapsed, rss):
+        if name in _EXPLICIT_EXACT or any(name.startswith(p) for p in _EXPLICIT_PREFIXES):
+            return  # handled explicitly via stop_phase
+        # text_encoder_load is lazy — weights load during text_encode,
+        # so the phase time is always ~0.0s. Show "lazy loading" instead.
+        loading_mode = "lazy loading" if name == "text_encoder_load" else None
+        report.stop_phase(name, elapsed or 0.0, rss, loading_mode=loading_mode)
+    prof.on_phase_complete = _on_phase_complete
 
     prof.start("total_wall_clock")
     prof.start("python_startup")
 
     # Load pipeline (auto-downloads and converts weights if needed)
-    print(f"  Importing Mage-Flow MLX pipeline from {args.model}...")
-    print(f"  Current working directory: {os.getcwd()}")
-    print(f"  Python executable: {sys.executable}")
+    if verbose:
+        print(f"  Importing Mage-Flow MLX pipeline from {args.model}...")
+        print(f"  Current working directory: {os.getcwd()}")
+        print(f"  Python executable: {sys.executable}")
 
     try:
         from mage_mlx import MageFlowPipeline
-        print("  Imported MageFlowPipeline successfully")
+        if verbose:
+            print("  Imported MageFlowPipeline successfully")
     except Exception as e:
         print(f"  ERROR importing MageFlowPipeline: {e}")
         traceback.print_exc()
@@ -265,7 +266,7 @@ def main():
             report=report,
         )
         prof.stop("total_wall_clock")
-        if args.metadata and report:
+        if report:
             report.stop_phase("total_wall_clock", prof.get_elapsed("total_wall_clock") or 0.0)
             # Prefer run peak from samples; fall back to metadata peak if present
             peak_ram = prof.get_peak_rss_gib()
@@ -295,43 +296,43 @@ def main():
     if args.image is not None:
         _run_edit(args, prof, report)
         prof.stop("total_wall_clock")
-        if args.metadata:
-            # For edit: image_path = target image, image_paths = reference images
-            if args.ref_images is None:
-                ref_paths = [args.image]
-            else:
-                ref_paths = [p.strip() for p in args.ref_images.split(",") if p.strip()]
-            metadata = _collect_metadata(
-                model=args.model,
-                image_path=args.image,
-                image_paths=ref_paths if len(ref_paths) > 1 else None,
-                generation_time=prof.get_elapsed("total_wall_clock"),
-                peak_memory_gib=prof.get_peak_rss_gib(),
+        # For edit: image_path = target image, image_paths = reference images
+        if args.ref_images is None:
+            ref_paths = [args.image]
+        else:
+            ref_paths = [p.strip() for p in args.ref_images.split(",") if p.strip()]
+        metadata = _collect_metadata(
+            model=args.model,
+            image_path=args.image,
+            image_paths=ref_paths if len(ref_paths) > 1 else None,
+            generation_time=prof.get_elapsed("total_wall_clock"),
+            peak_memory_gib=prof.get_peak_rss_gib(),
+        )
+        if report:
+            report.stop_phase("total_wall_clock", prof.get_elapsed("total_wall_clock") or 0.0)
+            report.add_prompt(
+                index=1,
+                prompt=args.prompt,
+                resolution=f"{args.width}x{args.height}",
+                steps=args.steps,
+                quantize=args.quantize,
+                generation_time=prof.get_elapsed("edit") or 0.0,
+                peak_rss_gib=prof.get_max_phase_rss(
+                    "edit",
+                    "text_encode",
+                    "text_encoder_unload",
+                    "dit_step_",
+                    "edit_step_",
+                    "vae_decode",
+                ) or prof.get_peak_rss_gib(),
+                saved_file=args.output,
             )
-            if report:
-                report.stop_phase("total_wall_clock", prof.get_elapsed("total_wall_clock") or 0.0)
-                report.add_prompt(
-                    index=1,
-                    prompt=args.prompt,
-                    resolution=f"{args.width}x{args.height}",
-                    steps=args.steps,
-                    quantize=args.quantize,
-                    generation_time=prof.get_elapsed("edit") or 0.0,
-                    peak_rss_gib=prof.get_max_phase_rss(
-                        "edit",
-                        "text_encode",
-                        "text_encoder_unload",
-                        "dit_step_",
-                        "edit_step_",
-                        "vae_decode",
-                    ) or prof.get_peak_rss_gib(),
-                    saved_file=args.output,
-                )
-                report.print_summary(
-                    total_time=prof.get_elapsed("total_wall_clock") or 0.0,
-                    peak_ram=prof.get_peak_rss_gib() or 0.0,
-                )
-                report.print_run_metadata(metadata)
+            report.print_summary(
+                total_time=prof.get_elapsed("total_wall_clock") or 0.0,
+                peak_ram=prof.get_peak_rss_gib() or 0.0,
+            )
+            report.print_run_metadata(metadata)
+        if args.metadata:
             base_path = os.path.splitext(args.output)[0]
             prof.save_metadata(base_path, metadata)
             print(f"  Metadata saved to {_C.GREEN}{base_path}.json{_C.RESET} and {_C.GREEN}{base_path}.md{_C.RESET}")
@@ -373,7 +374,7 @@ def main():
 
     # --- Phase: Text encoding (Qwen) ---
     # Print prompt header BEFORE encoding starts (so it appears right before metadata)
-    if report:
+    if report and report.verbose:
         report.prompt_header(1, 1)
         report.add_metadata("generation", "prompt", args.prompt)
         report.add_metadata("generation", "resolution", f"{args.width}x{args.height}")
@@ -443,7 +444,8 @@ def main():
     else:
         txt_embeds = cached_pos
         neg_txt_embeds = cached_neg
-        print("  Cache HIT — skipping Qwen encode")
+        if verbose:
+            print("  Cache HIT — skipping Qwen encode")
         prof.set_metadata("generation", "cache", "HIT")
 
     # Unload Qwen — it's only needed for prompt encoding
@@ -534,19 +536,19 @@ def main():
         )
 
     # --- Report + Metadata ---
+    metadata = _collect_metadata(
+        model=args.model,
+        image_path=None,
+        image_paths=None,
+        generation_time=prof.get_elapsed("total_wall_clock"),
+        peak_memory_gib=prof.get_peak_rss_gib(),
+        )
+    report.print_summary(
+        total_time=prof.get_elapsed("total_wall_clock") or 0.0,
+        peak_ram=prof.get_peak_rss_gib() or 0.0,
+    )
+    report.print_run_metadata(metadata)
     if args.metadata:
-        metadata = _collect_metadata(
-            model=args.model,
-            image_path=None,
-            image_paths=None,
-            generation_time=prof.get_elapsed("total_wall_clock"),
-            peak_memory_gib=prof.get_peak_rss_gib(),
-        )
-        report.print_summary(
-            total_time=prof.get_elapsed("total_wall_clock") or 0.0,
-            peak_ram=prof.get_peak_rss_gib() or 0.0,
-        )
-        report.print_run_metadata(metadata)
         base_path = os.path.splitext(args.output)[0]
         prof.save_metadata(base_path, metadata)
         print(f"  Metadata saved to {_C.GREEN}{base_path}.json{_C.RESET} and {_C.GREEN}{base_path}.md{_C.RESET}")
@@ -590,7 +592,7 @@ def _run_edit(args, prof, report=None):
         )
 
     # Print prompt header (magenta bold) before edit metadata
-    if report:
+    if report and report.verbose:
         report.prompt_header(1, 1)
         report.add_metadata("edit", "prompt", args.prompt)
         report.add_metadata("edit", "resolution", f"{args.width}x{args.height}")

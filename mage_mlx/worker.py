@@ -198,7 +198,8 @@ def run_worker(
         print("No valid prompts found in JSONL file.")
         return None
 
-    print(f"  Loaded {len(prompts)} prompts from {jsonl_path}")
+    if report and report.verbose:
+        print(f"  Loaded {len(prompts)} prompts from {jsonl_path}")
 
     # Set up real-time callback for LiveReport
     # The callback handles sub-phases (dit_step_N, vae_decode, etc.) in real-time.
@@ -246,9 +247,10 @@ def run_worker(
         report.stop_phase("pipeline_load", profiler.get_elapsed("pipeline_load") or 0.0, profiler.get_phase_rss("pipeline_load"), grey_separator=True)
 
     # --- Phase 1: Pre-encode all prompts (load Qwen once, encode all, unload) ---
-    print(f"\n{'=' * 60}")
-    print("Phase 1: Pre-encoding prompts (Qwen batch mode)")
-    print(f"{'=' * 60}")
+    if report and report.verbose:
+        print(f"\n{'=' * 60}")
+        print("Phase 1: Pre-encoding prompts (Qwen batch mode)")
+        print(f"{'=' * 60}")
 
     # Store embeddings in memory for Phase 2
     prompt_embeds: dict[int, tuple[mx.array, Optional[mx.array]]] = {}
@@ -281,7 +283,8 @@ def run_worker(
                         report.stop_phase(f"text_encode_neg_{i + 1}", profiler.get_elapsed(f"text_encode_neg_{i + 1}") or 0.0, profiler.get_phase_rss(f"text_encode_neg_{i + 1}"))
                         report.add_metadata(f"text_encode_neg_{i + 1}", "cache", "HIT")
             prompt_embeds[i] = (cached_embeds, neg_embeds)
-            print(f"  Prompt {i + 1}/{len(prompts)}: Cache HIT — skipping Qwen encode")
+            if report and report.verbose:
+                print(f"  Prompt {i + 1}/{len(prompts)}: Cache HIT — skipping Qwen encode")
         else:
             if profiler:
                 profiler.start(f"text_encode_{i + 1}")
@@ -315,7 +318,8 @@ def run_worker(
                 if report:
                     report.stop_phase(f"text_encode_{i + 1}", profiler.get_elapsed(f"text_encode_{i + 1}") or 0.0, profiler.get_phase_rss(f"text_encode_{i + 1}"))
                     report.add_metadata(f"text_encode_{i + 1}", "cache", "MISS")
-            print(f"  Prompt {i + 1}/{len(prompts)}: Cache MISS — encoding with Qwen")
+            if report and report.verbose:
+                print(f"  Prompt {i + 1}/{len(prompts)}: Cache MISS — encoding with Qwen")
 
     # Unload Qwen once after all prompts are encoded
     if profiler:
@@ -327,7 +331,8 @@ def run_worker(
         profiler.stop("text_encoder_unload")
     if report:
         report.stop_phase("text_encoder_unload", profiler.get_elapsed("text_encoder_unload") or 0.0, profiler.get_phase_rss("text_encoder_unload"))
-    print("  Qwen unloaded (batch encoding complete)")
+    if report and report.verbose:
+        print("  Qwen unloaded (batch encoding complete)")
 
     # --- Phase 1.5: Load DiT + VAE (after Qwen is unloaded) ---
     # This is the key optimization: DiT + VAE are loaded AFTER the text
@@ -344,9 +349,10 @@ def run_worker(
         report.stop_phase("vae_load", profiler.get_elapsed("vae_load") or 0.0, profiler.get_phase_rss("vae_load"))
 
     # --- Phase 2: Generate all images using cached embeddings ---
-    print(f"\n{'=' * 60}")
-    print("Phase 2: Generating images (DiT + VAE)")
-    print(f"{'=' * 60}")
+    if report and report.verbose:
+        print(f"\n{'=' * 60}")
+        print("Phase 2: Generating images (DiT + VAE)")
+        print(f"{'=' * 60}")
 
     # Collect per-prompt metadata for JSON output
     prompt_metadata: list[dict[str, Any]] = []
@@ -355,7 +361,7 @@ def run_worker(
         params = merge_params(defaults, prompt_cfg)
 
         # Print prompt header via LiveReport
-        if report:
+        if report and report.verbose:
             report.prompt_header(i + 1, len(prompts))
 
         # Check if pipeline reload or scheduler reset is needed
@@ -385,7 +391,7 @@ def run_worker(
             current_params = dict(params)
 
         # Set per-prompt metadata BEFORE generation starts (so it appears right after prompt header)
-        if report:
+        if report and report.verbose:
             report.add_metadata(f"generation_{i + 1}", "prompt", params["prompt"])
             report.add_metadata(f"generation_{i + 1}", "resolution", f"{params['width']}x{params['height']}")
             report.add_metadata(f"generation_{i + 1}", "steps", str(params["steps"]))
@@ -460,23 +466,23 @@ def run_worker(
     if profiler:
         profiler.stop("total_wall_clock")
 
-    # --- Save metadata files ---
+    # --- Always build metadata dict for summary report ---
+    metadata = {
+        "model": _get_model_name(defaults["model"]),
+        "base_model": _get_base_model(defaults["model"]),
+        "generation_time_seconds": profiler.get_elapsed("total_wall_clock") if profiler else None,
+        "created_at": datetime.now().isoformat(),
+        "image_path": None,
+        "image_paths": None,
+        "image_strength": None,
+        "peak_memory_gib": profiler.get_peak_rss_gib() if profiler else None,
+    }
+
     if metadata_enabled and profiler:
-        metadata = {
-            "model": _get_model_name(defaults["model"]),
-            "base_model": _get_base_model(defaults["model"]),
-            "generation_time_seconds": profiler.get_elapsed("total_wall_clock"),
-            "created_at": datetime.now().isoformat(),
-            "image_path": None,
-            "image_paths": None,
-            "image_strength": None,
-            "peak_memory_gib": profiler.get_peak_rss_gib(),
-        }
         base_path = os.path.splitext(jsonl_path)[0]
         profiler.save_metadata(base_path, metadata, prompts=prompt_metadata)
-        return metadata, prompt_metadata
 
-    return None, None
+    return metadata, prompt_metadata
 
 
 def _generate_with_cached_embeds(
