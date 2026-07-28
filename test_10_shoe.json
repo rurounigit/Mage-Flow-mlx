@@ -2,8 +2,8 @@
   "metadata": {
     "model": "microsoft/Mage-Flow-Turbo",
     "base_model": "MageFlow",
-    "generation_time_seconds": 19.0,
-    "created_at": "2026-07-28T22:26:56.447069",
+    "generation_time_seconds": 21.5,
+    "created_at": "2026-07-28T22:56:36.363874",
     "image_path": null,
     "image_paths": null,
     "image_strength": null,
@@ -12,15 +12,15 @@
   "phases": [
     {
       "name": "python_startup",
-      "elapsed": 3.0708033591508865e-05,
-      "peak_rss_gib": 0.217041015625,
+      "elapsed": 2.9499875381588936e-05,
+      "peak_rss_gib": 0.2170867919921875,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "text_encoder_load",
-      "elapsed": 0.00879154191352427,
-      "peak_rss_gib": 0.2288360595703125,
+      "elapsed": 0.009571417002007365,
+      "peak_rss_gib": 0.22894287109375,
       "metadata": {
         "tensors": "713"
       },
@@ -28,45 +28,45 @@
     },
     {
       "name": "tokenizer_load",
-      "elapsed": 2.229498000117019,
-      "peak_rss_gib": 0.4416046142578125,
+      "elapsed": 2.2791494589764625,
+      "peak_rss_gib": 0.443084716796875,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "pipeline_load",
-      "elapsed": 2.2607542918995023,
-      "peak_rss_gib": 0.4416046142578125,
+      "elapsed": 2.3109836659859866,
+      "peak_rss_gib": 0.443084716796875,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "text_encode",
-      "elapsed": 1.091696321964264e-05,
-      "peak_rss_gib": 0.4416656494140625,
+      "elapsed": 1.634395166998729,
+      "peak_rss_gib": 7.492645610123873,
       "metadata": {
-        "cache": "HIT"
+        "cache": "MISS"
       },
       "saved_file": null
     },
     {
       "name": "text_encoder_unload",
-      "elapsed": 0.042753917165100574,
-      "peak_rss_gib": 0.4416961669921875,
+      "elapsed": 0.174310291884467,
+      "peak_rss_gib": 0.2540283203125,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_load",
-      "elapsed": 1.9416063749231398,
-      "peak_rss_gib": 7.668584149330854,
+      "elapsed": 1.4429709170944989,
+      "peak_rss_gib": 7.66879777982831,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_load",
-      "elapsed": 0.06550041702575982,
-      "peak_rss_gib": 7.925726281479001,
+      "elapsed": 0.0925067497882992,
+      "peak_rss_gib": 7.925939911976457,
       "metadata": {
         "tensors": "728"
       },
@@ -74,82 +74,84 @@
     },
     {
       "name": "dit_step_1",
-      "elapsed": 3.216405165847391,
-      "peak_rss_gib": 7.93277589045465,
+      "elapsed": 3.308202625019476,
+      "peak_rss_gib": 7.9327758979052305,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_2",
-      "elapsed": 3.116362249944359,
-      "peak_rss_gib": 7.93277589045465,
+      "elapsed": 3.2836502080317587,
+      "peak_rss_gib": 7.9327758979052305,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_3",
-      "elapsed": 3.14156666607596,
-      "peak_rss_gib": 7.93277589045465,
+      "elapsed": 3.327443083981052,
+      "peak_rss_gib": 7.9327758979052305,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_4",
-      "elapsed": 3.13084700005129,
-      "peak_rss_gib": 7.93277589045465,
+      "elapsed": 3.2504130420275033,
+      "peak_rss_gib": 7.9327758979052305,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_decode",
-      "elapsed": 1.8935258751735091,
-      "peak_rss_gib": 7.944555686786771,
+      "elapsed": 2.3595097919460386,
+      "peak_rss_gib": 7.944555694237351,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "generation",
-      "elapsed": 16.650461124954745,
-      "peak_rss_gib": 7.92893067933619,
+      "elapsed": 19.046399333979934,
+      "peak_rss_gib": 7.928930686786771,
       "metadata": {
         "prompt": "An unbranded futuristic running shoe made from white technical mesh with a vivid orange sole, floating above a pale gray studio surface, dramatic softbox lighting, premium product photography, photorealistic.",
         "resolution": "1024x1024",
         "steps": "4",
-        "quantize": "None"
+        "quantize": "None",
+        "seed": "42"
       },
       "saved_file": null
     },
     {
       "name": "save_png",
-      "elapsed": 0.08052700012922287,
-      "peak_rss_gib": 7.92893067933619,
+      "elapsed": 0.11974300001747906,
+      "peak_rss_gib": 7.928930686786771,
       "metadata": {},
       "saved_file": "test_10_shoe.png"
     },
     {
       "name": "total_wall_clock",
-      "elapsed": 19.021942583145574,
-      "peak_rss_gib": 7.92893067933619,
+      "elapsed": 21.515971957938746,
+      "peak_rss_gib": 7.928930686786771,
       "metadata": {},
       "saved_file": null
     }
   ],
-  "total_wall_clock": 19.021942583145574,
+  "total_wall_clock": 21.515971957938746,
   "overview": [
     {
       "index": 1,
-      "time": 16.650461124954745,
-      "peak_rss_gib": 7.944555686786771,
+      "time": 19.046399333979934,
+      "peak_rss_gib": 7.944555694237351,
       "resolution": "1024x1024",
       "steps": 4,
+      "seed": 42,
       "file": "test_10_shoe.png"
     }
   ],
   "summary": {
-    "total_time": 19.021942583145574,
-    "peak_ram": 7.944555686786771,
+    "total_time": 21.515971957938746,
+    "peak_ram": 7.944555694237351,
     "prompts_count": 1,
-    "overhead": 2.3714814581908286
+    "overhead": 2.469572623958811
   },
   "log": [
     "======================================================================",

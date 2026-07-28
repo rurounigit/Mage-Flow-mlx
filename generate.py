@@ -334,6 +334,7 @@ def main():
                 resolution=f"{args.width}x{args.height}",
                 steps=args.steps,
                 quantize=args.quantize,
+                seed=args.seed,
                 generation_time=prof.get_elapsed("edit") or 0.0,
                 peak_rss_gib=prof.get_max_phase_rss(
                     "edit",
@@ -368,6 +369,7 @@ def main():
                     ) or prof.get_peak_rss_gib(),
                     "resolution": f"{args.width}x{args.height}",
                     "steps": args.steps,
+                    "seed": args.seed,
                     "file": args.output,
                 }
             ]
@@ -439,6 +441,7 @@ def main():
         report.add_metadata("generation", "resolution", f"{args.width}x{args.height}")
         report.add_metadata("generation", "steps", str(args.steps))
         report.add_metadata("generation", "quantize", str(args.quantize))
+        report.add_metadata("generation", "seed", str(args.seed))
         print()  # Empty line after metadata, before generation steps
 
     prof.start("generation")
@@ -452,6 +455,7 @@ def main():
             prompt=args.prompt,
             negative_prompt=args.negative_prompt,
             te_path=te_path,
+            seed=args.seed,
         )
         cached_pos = embedding_cache.get(pos_key)
 
@@ -462,6 +466,7 @@ def main():
             prompt=args.negative_prompt,
             negative_prompt=" ",
             te_path=te_path,
+            seed=args.seed,
         )
         cached_neg = embedding_cache.get(neg_key)
 
@@ -548,6 +553,7 @@ def main():
         prof.set_metadata("generation", "resolution", f"{args.width}x{args.height}")
         prof.set_metadata("generation", "steps", str(args.steps))
         prof.set_metadata("generation", "quantize", str(args.quantize))
+        prof.set_metadata("generation", "seed", str(args.seed))
 
     # --- Phase: Save ---
     prof.start("save_png")
@@ -571,6 +577,7 @@ def main():
             resolution=f"{args.width}x{args.height}",
             steps=args.steps,
             quantize=args.quantize,
+            seed=args.seed,
             generation_time=prof.get_elapsed("generation") or 0.0,
             peak_rss_gib=prof.get_max_phase_rss(
                 "generation",
@@ -616,6 +623,7 @@ def main():
                 ) or prof.get_peak_rss_gib(),
                 "resolution": f"{args.width}x{args.height}",
                 "steps": args.steps,
+                "seed": args.seed,
                 "file": args.output,
             }
         ]
@@ -676,6 +684,7 @@ def _run_edit(args, prof, report=None):
         report.add_metadata("edit", "resolution", f"{args.width}x{args.height}")
         report.add_metadata("edit", "steps", str(args.steps))
         report.add_metadata("edit", "quantize", str(args.quantize))
+        report.add_metadata("edit", "seed", str(args.seed))
         print()  # Empty line after metadata, before generation steps
 
     prof.start("edit")
@@ -728,6 +737,7 @@ def _run_edit(args, prof, report=None):
         prof.set_metadata("edit", "resolution", f"{args.width}x{args.height}")
         prof.set_metadata("edit", "steps", str(args.steps))
         prof.set_metadata("edit", "quantize", str(args.quantize))
+        prof.set_metadata("edit", "seed", str(args.seed))
 
     # Extract PIL image from GeneratedImage
     image = generated.image

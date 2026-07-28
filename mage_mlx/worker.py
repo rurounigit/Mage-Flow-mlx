@@ -280,6 +280,7 @@ def run_worker(
             prompt=params["prompt"],
             negative_prompt=params.get("negative_prompt", " "),
             te_path=te_path,
+            seed=params["seed"],
         )
         cached_embeds = cache.get(cache_key)
 
@@ -415,6 +416,7 @@ def run_worker(
             report.add_metadata(f"generation_{i + 1}", "resolution", f"{params['width']}x{params['height']}")
             report.add_metadata(f"generation_{i + 1}", "steps", str(params["steps"]))
             report.add_metadata(f"generation_{i + 1}", "quantize", str(params.get("quantize")))
+            report.add_metadata(f"generation_{i + 1}", "seed", str(params["seed"]))
             print()  # Empty line after metadata, before generation steps
 
         if profiler:
@@ -436,6 +438,7 @@ def run_worker(
             profiler.set_metadata(f"generation_{i + 1}", "resolution", f"{params['width']}x{params['height']}")
             profiler.set_metadata(f"generation_{i + 1}", "steps", str(params["steps"]))
             profiler.set_metadata(f"generation_{i + 1}", "quantize", str(params.get("quantize")))
+            profiler.set_metadata(f"generation_{i + 1}", "seed", str(params["seed"]))
         if report:
             report.stop_phase(f"generation_{i + 1}", profiler.get_elapsed(f"generation_{i + 1}") or 0.0, profiler.get_phase_rss(f"generation_{i + 1}"))
 
@@ -463,6 +466,7 @@ def run_worker(
             "quantize": params.get("quantize"),
             "resolution": f"{params['width']}x{params['height']}",
             "steps": params["steps"],
+            "seed": params["seed"],
             "generation_time_seconds": gen_elapsed,
             "peak_rss_gib": gen_peak_rss,
             "image_path": params["output"],
@@ -476,6 +480,7 @@ def run_worker(
                 resolution=f"{params['width']}x{params['height']}",
                 steps=params["steps"],
                 quantize=params.get("quantize"),
+                seed=params["seed"],
                 generation_time=gen_elapsed,
                 peak_rss_gib=gen_peak_rss,
                 saved_file=params["output"],
@@ -510,6 +515,7 @@ def run_worker(
                 "peak_rss_gib": pm["peak_rss_gib"],
                 "resolution": pm["resolution"],
                 "steps": pm["steps"],
+                "seed": pm.get("seed"),
                 "file": pm["image_path"],
             }
             for pm in prompt_metadata

@@ -56,6 +56,7 @@ class EmbeddingCache:
         negative_prompt: str = " ",
         te_path: Optional[str] = None,
         template_version: int = TOKENIZER_VERSION,
+        seed: Optional[int] = None,
     ) -> str:
         """Build a cache key from prompt content and encoder signature.
 
@@ -64,12 +65,15 @@ class EmbeddingCache:
         - The negative prompt
         - The text-encoder checkpoint signature (size + mtime)
         - The tokenizer/template version
+        - The generation seed (so different seeds get different cache entries)
 
         Args:
             prompt: Raw prompt text (before template)
             negative_prompt: Negative prompt text
             te_path: Path to text_encoder.safetensors (for signature)
             template_version: Version of the chat template
+            seed: Generation seed (included in key so different seeds
+                produce different cache entries)
 
         Returns:
             SHA-256 hex digest string
@@ -92,6 +96,7 @@ class EmbeddingCache:
             "prompt": formatted,
             "negative_prompt": formatted_neg,
             "te_signature": te_signature,
+            "seed": seed,
         }
         key_str = json.dumps(key_data, sort_keys=True)
         return hashlib.sha256(key_str.encode("utf-8")).hexdigest()

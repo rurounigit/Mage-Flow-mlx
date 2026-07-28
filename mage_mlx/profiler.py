@@ -395,8 +395,8 @@ class Profiler:
         if overview:
             lines.append("## Overview")
             lines.append("")
-            lines.append("| # | Time (s) | Peak RSS (GiB) | Resolution | Steps | File |")
-            lines.append("|---|----------|----------------|------------|-------|------|")
+            lines.append("|_ | Time (s) | Peak RSS (GiB) | Resolution | Steps | Seed | File |")
+            lines.append("|---|----------|----------------|------------|-------|------|------|")
             for row in overview:
                 idx = row.get("index", "—")
                 t = row.get("time")
@@ -405,8 +405,9 @@ class Profiler:
                 r_str = f"{r:.2f}" if r is not None else "—"
                 res = row.get("resolution", "—")
                 steps = row.get("steps", "—")
+                seed = row.get("seed", "—")
                 file = row.get("file", "—")
-                lines.append(f"| {idx} | {t_str} | {r_str} | {res} | {steps} | {file} |")
+                lines.append(f"| {idx} | {t_str} | {r_str} | {res} | {steps} | {seed} | {file} |")
 
             # Text encode / decode row (worker mode)
             if summary and summary.get("text_encode_time", 0) > 0:
@@ -634,6 +635,7 @@ class _PromptRow:
     resolution: str
     steps: int
     quantize: Optional[int]
+    seed: Optional[int]
     generation_time: Optional[float]
     peak_rss_gib: Optional[float]
     saved_file: Optional[str]
@@ -863,6 +865,7 @@ class LiveReport:
         resolution: str,
         steps: int,
         quantize: Optional[int],
+        seed: Optional[int],
         generation_time: Optional[float],
         peak_rss_gib: Optional[float],
         saved_file: Optional[str],
@@ -874,6 +877,7 @@ class LiveReport:
             resolution=resolution,
             steps=steps,
             quantize=quantize,
+            seed=seed,
             generation_time=generation_time,
             peak_rss_gib=peak_rss_gib,
             saved_file=saved_file,
@@ -889,6 +893,7 @@ class LiveReport:
                     "peak_rss_gib": p.peak_rss_gib,
                     "resolution": p.resolution,
                     "steps": p.steps,
+                    "seed": p.seed,
                     "file": p.saved_file,
                 }
                 for p in self.prompts
@@ -930,7 +935,7 @@ class LiveReport:
         # Overview table
         if self.prompts:
             print(f"{_C.BOLD}  Overview:{_C.RESET}")
-            print(f"{_C.DIM}  {'#':>3}  {'Time':>8}   {'Peak RAM':>10}   {'Resolution':>12}   {'Steps':>5}   File{_C.RESET}")
+            print(f"{_C.DIM}  {'#':>3}  {'Time':>8}   {'Peak RAM':>10}   {'Resolution':>12}   {'Steps':>5}   {'Seed':>5}   File{_C.RESET}")
             print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
             gen_times = [p.generation_time for p in self.prompts if p.generation_time is not None]
             if gen_times:
@@ -944,10 +949,11 @@ class LiveReport:
                 else:
                     t_str = f"{_C.GRAY}—{_C.RESET}"
                 r_str = _colorize_ram(p.peak_rss_gib) if p.peak_rss_gib else f"{_C.GRAY}—{_C.RESET}"
+                seed_str = f"{p.seed}" if p.seed is not None else "—"
                 file_str = f"{_C.GREEN}{p.saved_file}{_C.RESET}" if p.saved_file else f"{_C.GRAY}—{_C.RESET}"
                 print(
                     f"  {p.index:>3}  {_ansi_rjust(t_str, 8)}   {_ansi_rjust(r_str, 10)}   "
-                    f"{p.resolution:>12}   {p.steps:>5}   {file_str}"
+                    f"{p.resolution:>12}   {p.steps:>5}   {seed_str:>5}   {file_str}"
                 )
 
             sum_gen = sum(p.generation_time for p in self.prompts if p.generation_time is not None)
