@@ -455,7 +455,6 @@ def main():
             prompt=args.prompt,
             negative_prompt=args.negative_prompt,
             te_path=te_path,
-            seed=args.seed,
         )
         cached_pos = embedding_cache.get(pos_key)
 
@@ -466,7 +465,6 @@ def main():
             prompt=args.negative_prompt,
             negative_prompt=" ",
             te_path=te_path,
-            seed=args.seed,
         )
         cached_neg = embedding_cache.get(neg_key)
 

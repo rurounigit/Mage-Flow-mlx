@@ -280,7 +280,6 @@ def run_worker(
             prompt=params["prompt"],
             negative_prompt=params.get("negative_prompt", " "),
             te_path=te_path,
-            seed=params["seed"],
         )
         cached_embeds = cache.get(cache_key)
 
