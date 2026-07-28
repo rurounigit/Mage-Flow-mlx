@@ -445,7 +445,7 @@ def _ansi_rjust(s: str, width: int, color: str = "") -> str:
     visible characters when calculating padding, so ANSI color codes don't
     push subsequent columns out of alignment.
     """
-    pad = max(0, width - len(s))
+    pad = max(0, width - _visible_len(s))
     result = ' ' * pad + s
     if color:
         result = f"{color}{result}{_C.RESET}"
@@ -556,6 +556,7 @@ class LiveReport:
         peak_rss_gib: Optional[float] = None,
         saved_file: Optional[str] = None,
         loading_mode: Optional[str] = None,
+        grey_separator: bool = False,
     ) -> None:
         """Called when a phase completes — prints timing + RAM.
 
@@ -567,6 +568,9 @@ class LiveReport:
             loading_mode: If set (e.g. "lazy"), displayed instead of the
                 time string. Used for phases where the actual work happens
                 later (e.g. text_encoder_load where weights are lazy-loaded).
+            grey_separator: If True, print a grey separator line instead of
+                an empty line before the phase. Used to visually group
+                phases (e.g. above pipeline_load in worker mode).
         """
         row = None
         for r in reversed(self.phases):
@@ -608,13 +612,20 @@ class LiveReport:
         prev = self.phases[-1] if self.phases else None
         prev_was_block = prev and prev.elapsed is not None and _is_block(prev.name)
 
+        should_print_separator = False
         if is_block_phase:
-            # Empty line before first block phase (if previous was not a block phase)
+            # Separator before first block phase (if previous was not a block phase)
             if not prev_was_block:
-                print()
+                should_print_separator = True
         else:
-            # Empty line before non-block phases (always, gives separation after blocks)
-            print()
+            # Separator before non-block phases (always, gives separation after blocks)
+            should_print_separator = True
+
+        if should_print_separator:
+            if grey_separator:
+                print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
+            else:
+                print()
 
         print(f"  {name:<36} {time_str}   {ram_str}", end="")
         if saved_file:
@@ -766,7 +777,7 @@ class LiveReport:
                 r_str = _colorize_ram(p.peak_rss_gib) if p.peak_rss_gib else f"{_C.GRAY}—{_C.RESET}"
                 file_str = f"{_C.GREEN}{p.saved_file}{_C.RESET}" if p.saved_file else f"{_C.GRAY}—{_C.RESET}"
                 print(
-                    f"  {p.index:>3}  {t_str:>8}   {r_str:>10}   "
+                    f"  {p.index:>3}  {_ansi_rjust(t_str, 8)}   {_ansi_rjust(r_str, 10)}   "
                     f"{p.resolution:>12}   {p.steps:>5}   {file_str}"
                 )
 
@@ -800,7 +811,7 @@ class LiveReport:
                     else:
                         te_ram_str = f"{_C.GRAY}—{_C.RESET}"
                     print(
-                        f"  {'—':>3}  {te_str:>8}   {te_ram_str:>10}   "
+                        f"  {'—':>3}  {_ansi_rjust(te_str, 8)}   {_ansi_rjust(te_ram_str, 10)}   "
                         f"{'—':>12}   {'—':>5}   {_C.GRAY}text encode / decode{_C.RESET}"
                     )
 
@@ -813,7 +824,7 @@ class LiveReport:
                 print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
                 oh_str = _colorize_total(overhead)
                 print(
-                    f"  {'—':>3}  {oh_str:>8}   {'—':>10}   "
+                    f"  {'—':>3}  {_ansi_rjust(oh_str, 8)}   {_ansi_rjust('—', 10)}   "
                     f"{'—':>12}   {'—':>5}   {_C.GRAY}overhead (load + encode + decode){_C.RESET}"
                 )
             print()

@@ -145,7 +145,7 @@ def needs_reload(
         new: New prompt parameters
 
     Returns:
-        (needs_pipeline_reload, needs_scheduler_reset)
+        (needs_pipeline_load, needs_scheduler_reset)
     """
     needs_pipeline = False
     needs_scheduler = False
@@ -204,7 +204,7 @@ def run_worker(
     # The callback handles sub-phases (dit_step_N, vae_decode, etc.) in real-time.
     # Main phases are reported explicitly via stop_phase to add saved_file/metadata.
     _EXPLICIT_EXACT = {"dit_load", "vae_load"}
-    _EXPLICIT_PREFIXES = ("pipeline_reload", "text_encoder_unload", "text_encode_", "generation_", "save_", "total_wall_clock", "python_startup")
+    _EXPLICIT_PREFIXES = ("pipeline_load", "text_encoder_unload", "text_encode_", "generation_", "save_", "total_wall_clock", "python_startup")
     if report and profiler:
         def _on_phase_complete(name, elapsed, rss):
             if name in _EXPLICIT_EXACT or any(name.startswith(p) for p in _EXPLICIT_PREFIXES):
@@ -230,7 +230,7 @@ def run_worker(
     # DiT + VAE (~7.9 GiB) simultaneously.
     first_params = merge_params(defaults, prompts[0])
     if profiler:
-        profiler.start("pipeline_reload")
+        profiler.start("pipeline_load")
     pipeline = MageFlowPipeline.from_pretrained_text_encoder(
         model_dir=first_params["model"],
         num_steps=first_params.get("steps", 4),
@@ -241,9 +241,9 @@ def run_worker(
         te_path = None
     current_params = dict(first_params)
     if profiler:
-        profiler.stop("pipeline_reload")
+        profiler.stop("pipeline_load")
     if report:
-        report.stop_phase("pipeline_reload", profiler.get_elapsed("pipeline_reload") or 0.0, profiler.get_phase_rss("pipeline_reload"))
+        report.stop_phase("pipeline_load", profiler.get_elapsed("pipeline_load") or 0.0, profiler.get_phase_rss("pipeline_load"), grey_separator=True)
 
     # --- Phase 1: Pre-encode all prompts (load Qwen once, encode all, unload) ---
     print(f"\n{'=' * 60}")
@@ -364,7 +364,7 @@ def run_worker(
         # Handle pipeline reload (model/quantize change)
         if needs_pipeline:
             if profiler:
-                profiler.start(f"pipeline_reload_{i + 1}")
+                profiler.start(f"pipeline_load_{i + 1}")
             # Only reload DiT + VAE — the text encoder is already unloaded
             # and we use cached embeddings for all prompts.
             pipeline.load_dit_vae(
@@ -374,9 +374,9 @@ def run_worker(
             )
             current_params = dict(params)
             if profiler:
-                profiler.stop(f"pipeline_reload_{i + 1}")
+                profiler.stop(f"pipeline_load_{i + 1}")
             if report:
-                report.stop_phase(f"pipeline_reload_{i + 1}", profiler.get_elapsed(f"pipeline_reload_{i + 1}") or 0.0, profiler.get_phase_rss(f"pipeline_reload_{i + 1}"))
+                report.stop_phase(f"pipeline_load_{i + 1}", profiler.get_elapsed(f"pipeline_load_{i + 1}") or 0.0, profiler.get_phase_rss(f"pipeline_load_{i + 1}"))
 
         # Handle scheduler reset (steps change)
         if needs_scheduler:

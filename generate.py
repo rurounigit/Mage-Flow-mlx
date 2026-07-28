@@ -203,7 +203,7 @@ def main():
         # MageFlowPipeline.generate() but never explicitly reported in single/edit
         # mode, so it must go through the callback. Worker handles it explicitly.
         _EXPLICIT_PREFIXES = (
-            "pipeline_reload",
+            "pipeline_load",
             "text_encode_",
             "generation_",
             "save_",
