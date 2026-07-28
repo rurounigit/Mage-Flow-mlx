@@ -225,15 +225,20 @@ def main():
     # Load pipeline (auto-downloads and converts weights if needed)
     if verbose:
         print(f"  Importing Mage-Flow MLX pipeline from {args.model}...")
+        prof.log(f"  Importing Mage-Flow MLX pipeline from {args.model}...")
         print(f"  Current working directory: {os.getcwd()}")
+        prof.log(f"  Current working directory: {os.getcwd()}")
         print(f"  Python executable: {sys.executable}")
+        prof.log(f"  Python executable: {sys.executable}")
 
     try:
         from mage_mlx import MageFlowPipeline
         if verbose:
             print("  Imported MageFlowPipeline successfully")
+            prof.log("  Imported MageFlowPipeline successfully")
     except Exception as e:
         print(f"  ERROR importing MageFlowPipeline: {e}")
+        prof.log(f"  ERROR importing MageFlowPipeline: {e}")
         traceback.print_exc()
         sys.exit(1)
 

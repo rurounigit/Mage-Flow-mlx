@@ -64,9 +64,11 @@ class Profiler:
     metadata: dict[str, Any] = field(default_factory=dict)
     overview: list[dict[str, Any]] = field(default_factory=list)
     summary: dict[str, Any] = field(default_factory=dict)
+    log_messages: list[str] = field(default_factory=list)
 
     # ------------------------------------------------------------------
     # Memory helpers
+
     # ------------------------------------------------------------------
     @staticmethod
     def _get_process_rss_gib() -> Optional[float]:
@@ -206,8 +208,15 @@ class Profiler:
                 rec.saved_file = saved_file
                 return
 
+    def log(self, message: str) -> None:
+        """Append a log message to log_messages for inclusion in md/json output."""
+        if not self.enabled:
+            return
+        self.log_messages.append(message)
+
     # ------------------------------------------------------------------
     # Reporting
+
     # ------------------------------------------------------------------
     def get_records(self) -> list[PhaseRecord]:
         """Return all recorded phases."""
@@ -274,7 +283,10 @@ class Profiler:
             data["overview"] = overview
         if summary:
             data["summary"] = summary
+        if self.log_messages:
+            data["log"] = self.log_messages
         return data
+
 
     def to_markdown(
         self,
@@ -304,6 +316,14 @@ class Profiler:
             return ""
 
         lines = []
+
+        # ── Log messages ─────────────────────────────────────────────────
+        if self.log_messages:
+            lines.append("## Log")
+            lines.append("")
+            for msg in self.log_messages:
+                lines.append(msg)
+            lines.append("")
 
         # ── Phase table ──────────────────────────────────────────────
         lines.append("## Phases")
@@ -626,6 +646,14 @@ class LiveReport:
         if self.verbose:
             print(f"{_C.DIM}  {'Phase':<36} {'Time':>14}   {'Peak RAM':>10}{_C.RESET}")
             print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
+        # Capture header in profiler log for md/json output
+        if self.profiler is not None:
+            self.profiler.log("=" * 70)
+            self.profiler.log(f"  {self.title}")
+            self.profiler.log("=" * 70)
+            if self.verbose:
+                self.profiler.log(f"  {'Phase':<36} {'Time':>14}   {'Peak RAM':>10}")
+                self.profiler.log(f"  {'─' * 62}")
 
     # ── progress bar (non-verbose mode) ──
     def progress_bar(self, name: str) -> None:

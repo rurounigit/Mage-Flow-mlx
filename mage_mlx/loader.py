@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 import gc
 import json
 import os
@@ -229,6 +231,7 @@ def map_vae_key(key: str) -> str | None:
 def ensure_mlx_model(
     model_path_or_repo: str = "models/microsoft_Mage-Flow-Turbo",
     quantize: int | None = None,
+    profiler: Optional["object"] = None,
 ) -> tuple[str, int | None]:
     """Ensure that converted MLX model weights exist at model_path_or_repo.
 
@@ -283,9 +286,13 @@ def ensure_mlx_model(
     if not all_exist:
         print(f"🔄 Converted MLX weights not found in '{output_dir}'.")
         print(f"📥 Downloading and converting weights from {repo_id} (this happens only once)...")
+        if profiler:
+            profiler.log(f"📥 Downloading and converting weights from {repo_id} (this happens only once)...")
 
         os.makedirs(output_dir, exist_ok=True)
         print(f"  Downloading from HuggingFace: {repo_id}...")
+        if profiler:
+            profiler.log(f"  Downloading from HuggingFace: {repo_id}...")
         print("  This may take a while (17GB of weights)...")
         repo_dir = _cached_repo_snapshot(repo_id) or snapshot_download(
             repo_id,
@@ -295,6 +302,8 @@ def ensure_mlx_model(
 
         # 1. DiT weights & config
         print("Converting DiT weights...")
+        if profiler:
+            profiler.log("Converting DiT weights...")
         dit_path = os.path.join(repo_dir, "transformer", "diffusion_pytorch_model.safetensors")
         if not transformer_valid and os.path.exists(dit_path):
             process_and_convert_file(
@@ -323,6 +332,8 @@ def ensure_mlx_model(
 
         # 2. VAE weights
         print("Converting VAE weights...")
+        if profiler:
+            profiler.log("Converting VAE weights...")
         vae_path = os.path.join(repo_dir, "vae", "diffusion_pytorch_model.safetensors")
         vae_out_path = os.path.join(output_dir, "vae.safetensors")
         if not os.path.exists(vae_out_path) and os.path.exists(vae_path):
@@ -334,6 +345,8 @@ def ensure_mlx_model(
 
         # 3. Text Encoder weights
         print("Converting Text Encoder weights...")
+        if profiler:
+            profiler.log("Converting Text Encoder weights...")
         te_dir = os.path.join(repo_dir, "text_encoder")
         mlx_te = {}
         te_out_path = SHARED_TEXT_ENCODER_PATH

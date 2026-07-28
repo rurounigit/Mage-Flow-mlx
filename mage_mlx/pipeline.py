@@ -212,7 +212,7 @@ class MageFlowPipeline:
                 "quantize must be None, 4, or 8; "
                 f"received {quantize}"
             )
-        model_dir, actual_quantize = ensure_mlx_model(model_dir, quantize=quantize)
+        model_dir, actual_quantize = ensure_mlx_model(model_dir, quantize=quantize, profiler=profiler)
 
         # Load DiT config
         config_path = os.path.join(model_dir, "transformer_config.json")
@@ -342,7 +342,7 @@ class MageFlowPipeline:
         Returns:
             MageFlowPipeline instance with transformer=None, vae=None
         """
-        model_dir, _ = ensure_mlx_model(model_dir, quantize=None)
+        model_dir, _ = ensure_mlx_model(model_dir, quantize=None, profiler=profiler)
 
         # Load text encoder
         if profiler:
@@ -388,7 +388,7 @@ class MageFlowPipeline:
                 "quantize must be None, 4, or 8; "
                 f"received {quantize}"
             )
-        model_dir, actual_quantize = ensure_mlx_model(model_dir, quantize=quantize)
+        model_dir, actual_quantize = ensure_mlx_model(model_dir, quantize=quantize, profiler=profiler)
 
         # Load DiT config
         config_path = os.path.join(model_dir, "transformer_config.json")

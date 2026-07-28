@@ -2,8 +2,8 @@
   "metadata": {
     "model": "Mage-Flow-Edit-Turbo",
     "base_model": "microsoft/Mage-Flow-Edit-Turbo",
-    "generation_time_seconds": 40.59479712508619,
-    "created_at": "2026-07-28T19:20:34.993333",
+    "generation_time_seconds": 37.720838624984026,
+    "created_at": "2026-07-28T20:31:25.845546",
     "image_path": "test_10_shoe.png",
     "image_paths": null,
     "image_strength": null,
@@ -12,70 +12,70 @@
   "phases": [
     {
       "name": "python_startup",
-      "elapsed": 2.574990503489971e-05,
-      "peak_rss_gib": 0.21612548828125,
+      "elapsed": 3.200001083314419e-05,
+      "peak_rss_gib": 0.2164459228515625,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "pipeline_load",
-      "elapsed": 2.7341382082086056,
+      "elapsed": 2.3327707501593977,
       "peak_rss_gib": 8.26607609540224,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_load",
-      "elapsed": 1.4420120001304895,
+      "elapsed": 1.4250092499423772,
       "peak_rss_gib": 7.9256334491074085,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_load",
-      "elapsed": 7.499475032091141e-07,
+      "elapsed": 9.171199053525925e-07,
       "peak_rss_gib": 7.9256334491074085,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "edit_step_1",
-      "elapsed": 6.511094833025709,
+      "elapsed": 6.2750483751297,
       "peak_rss_gib": 7.870887856930494,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "edit_step_2",
-      "elapsed": 6.244683624943718,
+      "elapsed": 6.049963374854997,
       "peak_rss_gib": 7.870887856930494,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "edit_step_3",
-      "elapsed": 6.2254420418757945,
+      "elapsed": 6.126349499914795,
       "peak_rss_gib": 7.870887856930494,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "edit_step_4",
-      "elapsed": 6.335116083966568,
+      "elapsed": 6.196594042005017,
       "peak_rss_gib": 7.870887856930494,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_decode",
-      "elapsed": 1.800669667078182,
+      "elapsed": 0.3561497498303652,
       "peak_rss_gib": 7.865074215456843,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "edit",
-      "elapsed": 37.31748225004412,
+      "elapsed": 34.870690709212795,
       "peak_rss_gib": 7.856285152956843,
       "metadata": {
         "prompt": "change the shoe to deep burgundy polished leather with a translucent smoke-gray sole and subtle chrome details. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
@@ -87,24 +87,24 @@
     },
     {
       "name": "save_png",
-      "elapsed": 0.061384666012600064,
+      "elapsed": 0.06495554209686816,
       "peak_rss_gib": 7.856285152956843,
       "metadata": {},
       "saved_file": "test_10_shoe_edited.png"
     },
     {
       "name": "total_wall_clock",
-      "elapsed": 40.59479712508619,
-      "peak_rss_gib": 0.5662994384765625,
+      "elapsed": 37.720838624984026,
+      "peak_rss_gib": 2.9635162353515625,
       "metadata": {},
       "saved_file": null
     }
   ],
-  "total_wall_clock": 40.59479712508619,
+  "total_wall_clock": 37.720838624984026,
   "overview": [
     {
       "index": 1,
-      "time": 37.31748225004412,
+      "time": 34.870690709212795,
       "peak_rss_gib": 7.870887856930494,
       "resolution": "1024x1024",
       "steps": 4,
@@ -112,9 +112,20 @@
     }
   ],
   "summary": {
-    "total_time": 40.59479712508619,
+    "total_time": 37.720838624984026,
     "peak_ram": 8.26607609540224,
     "prompts_count": 1,
-    "overhead": 3.277314875042066
-  }
+    "overhead": 2.850147915771231
+  },
+  "log": [
+    "======================================================================",
+    "  Mage-Flow MLX",
+    "======================================================================",
+    "  Phase                                          Time     Peak RAM",
+    "  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+    "  Importing Mage-Flow MLX pipeline from microsoft/Mage-Flow-Edit-Turbo...",
+    "  Current working directory: /Users/tilman/projects/Mage-Flow-mlx",
+    "  Python executable: /Users/tilman/projects/Mage-Flow-mlx/.venv/bin/python",
+    "  Imported MageFlowPipeline successfully"
+  ]
 }
