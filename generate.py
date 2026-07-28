@@ -359,6 +359,7 @@ def main():
             "pipeline_load",
             prof.get_elapsed("pipeline_load") or 0.0,
             prof.get_phase_rss("pipeline_load"),
+            grey_separator=True,
         )
 
     # --- Phase: Embedding cache (single-prompt mode) ---
@@ -585,11 +586,12 @@ def _run_edit(args, prof, report=None):
             "pipeline_load",
             prof.get_elapsed("pipeline_load") or 0.0,
             prof.get_phase_rss("pipeline_load"),
+            grey_separator=True,
         )
-        print()  # Empty line after pipeline_load phase
 
-    # Set metadata BEFORE edit starts (so it appears right after prompt header)
+    # Print prompt header (magenta bold) before edit metadata
     if report:
+        report.prompt_header(1, 1)
         report.add_metadata("edit", "prompt", args.prompt)
         report.add_metadata("edit", "resolution", f"{args.width}x{args.height}")
         report.add_metadata("edit", "steps", str(args.steps))
