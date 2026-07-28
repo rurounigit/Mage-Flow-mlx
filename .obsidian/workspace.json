@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "test_10_shoe.md",
+                "file": "test_prompts.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "test_10_shoe"
+              "title": "test_prompts"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "test_10_shoe.md",
+                "file": "test_prompts.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for test_10_shoe"
+              "title": "Backlinks for test_prompts"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "test_10_shoe.md",
+                "file": "test_prompts.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from test_10_shoe"
+              "title": "Outgoing links from test_prompts"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "test_10_shoe.md",
+                "file": "test_prompts.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of test_10_shoe"
+              "title": "Outline of test_prompts"
             }
           }
         ]
@@ -185,12 +185,16 @@
   },
   "active": "524c3f94795a19ce",
   "lastOpenFiles": [
+    "test_10_shoe.md",
     "test_10_shoe.png",
+    "test_prompts.md",
     "test_10_shoe_edited.md",
+    "models/microsoft_Mage-Flow-Turbo/embedding_cache/7344b83c729565825b3c2a6df0c0ca5adbf38b6ec28b5a607eac2bc331dedfb7.json",
+    "models/microsoft_Mage-Flow-Turbo/embedding_cache/7344b83c729565825b3c2a6df0c0ca5adbf38b6ec28b5a607eac2bc331dedfb7.npy",
+    "models/microsoft_Mage-Flow-Turbo/embedding_cache/8f93eb77e17933241b9d999487c782d7cb8af14eed5732815a70cc6637fcd831.json",
+    "models/microsoft_Mage-Flow-Turbo/embedding_cache/8f93eb77e17933241b9d999487c782d7cb8af14eed5732815a70cc6637fcd831.npy",
     "models/microsoft_Mage-Flow-Turbo/embedding_cache/e99f52d2aa5ddb2d1508a97283eac60ba79df5478e5867318413ba375af13b13.json",
     "models/microsoft_Mage-Flow-Turbo/embedding_cache/e99f52d2aa5ddb2d1508a97283eac60ba79df5478e5867318413ba375af13b13.npy",
-    "test_prompts.md",
-    "test_10_shoe_edited.png",
-    "test_10_shoe.md"
+    "test_10_shoe_edited.png"
   ]
 }

@@ -270,8 +270,6 @@ def run_worker(
         print(f"\n{'=' * 60}")
         print("Phase 1: Pre-encoding prompts (Qwen batch mode)")
         print(f"{'=' * 60}")
-        if profiler:
-            profiler.log("Phase 1: Pre-encoding prompts (Qwen batch mode)")
 
     # Store embeddings in memory for Phase 2
     prompt_embeds: dict[int, tuple[mx.array, Optional[mx.array]]] = {}
@@ -306,8 +304,6 @@ def run_worker(
             prompt_embeds[i] = (cached_embeds, neg_embeds)
             if report and report.verbose:
                 print(f"  Prompt {i + 1}/{len(prompts)}: Cache HIT — skipping Qwen encode")
-                if profiler:
-                    profiler.log(f"  Prompt {i + 1}/{len(prompts)}: Cache HIT — skipping Qwen encode")
         else:
             if profiler:
                 profiler.start(f"text_encode_{i + 1}")
@@ -343,8 +339,6 @@ def run_worker(
                     report.add_metadata(f"text_encode_{i + 1}", "cache", "MISS")
             if report and report.verbose:
                 print(f"  Prompt {i + 1}/{len(prompts)}: Cache MISS — encoding with Qwen")
-                if profiler:
-                    profiler.log(f"  Prompt {i + 1}/{len(prompts)}: Cache MISS — encoding with Qwen")
 
     # Unload Qwen once after all prompts are encoded
     if profiler:
@@ -358,8 +352,6 @@ def run_worker(
         report.stop_phase("text_encoder_unload", profiler.get_elapsed("text_encoder_unload") or 0.0, profiler.get_phase_rss("text_encoder_unload"))
     if report and report.verbose:
         print("  Qwen unloaded (batch encoding complete)")
-        if profiler:
-            profiler.log("  Qwen unloaded (batch encoding complete)")
 
     # --- Phase 1.5: Load DiT + VAE (after Qwen is unloaded) ---
     # This is the key optimization: DiT + VAE are loaded AFTER the text
@@ -380,8 +372,6 @@ def run_worker(
         print(f"\n{'=' * 60}")
         print("Phase 2: Generating images (DiT + VAE)")
         print(f"{'=' * 60}")
-        if profiler:
-            profiler.log("Phase 2: Generating images (DiT + VAE)")
 
     # Collect per-prompt metadata for JSON output
     prompt_metadata: list[dict[str, Any]] = []

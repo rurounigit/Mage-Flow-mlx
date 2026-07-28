@@ -13,23 +13,23 @@
 | Phase | Time (s) | Peak RSS (GiB) | Saved File | Metadata |
 |-------|----------|----------------|------------|----------|
 | python_startup | 0.0 | 0.22 |  |  |
-| pipeline_load | 2.5 | 8.27 |  |  |
-| dit_load | 1.6 | 7.93 |  |  |
+| pipeline_load | 2.4 | 8.27 |  |  |
+| dit_load | 1.5 | 7.93 |  |  |
 | vae_load | 0.0 | 7.93 |  |  |
-| edit_step_1 | 7.0 | 7.87 |  |  |
-| edit_step_2 | 6.9 | 7.87 |  |  |
-| edit_step_3 | 7.0 | 7.87 |  |  |
-| edit_step_4 | 7.2 | 7.87 |  |  |
-| vae_decode | 2.5 | 7.87 |  |  |
-| edit | 41.8 | 7.86 |  | prompt=change the shoe to deep burgundy polished leather with a translucent smoke-gr..., resolution=1024x1024, steps=4, quantize=None |
-| save_png | 0.2 | 7.86 | test_10_shoe_edited.png |  |
-| total_wall_clock | 45.1 |  |  |  |
+| edit_step_1 | 6.6 | 7.87 |  |  |
+| edit_step_2 | 6.2 | 7.87 |  |  |
+| edit_step_3 | 6.3 | 7.87 |  |  |
+| edit_step_4 | 6.6 | 7.87 |  |  |
+| vae_decode | 1.9 | 7.87 |  |  |
+| edit | 37.6 | 7.86 |  | prompt=change the shoe to deep burgundy polished leather with a translucent smoke-gray sole and subtle chrome details. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background., resolution=1024x1024, steps=4, quantize=None |
+| save_png | 0.1 | 7.86 | test_10_shoe_edited.png |  |
+| total_wall_clock | 40.5 |  |  |  |
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Total time | 45.1 |
+| Total time | 40.5 |
 | Peak RAM | 8.27 |
 | Prompts | 1 |
 
@@ -37,8 +37,8 @@
 
 | # | Time (s) | Peak RSS (GiB) | Resolution | Steps | File |
 |---|----------|----------------|------------|-------|------|
-| 1 | 41.8 | 7.87 | 1024x1024 | 4 | test_10_shoe_edited.png |
-| — | 3.4 | — | — | — | overhead (load + encode + decode) |
+| 1 | 37.6 | 7.87 | 1024x1024 | 4 | test_10_shoe_edited.png |
+| — | 2.9 | — | — | — | overhead (load + encode + decode) |
 
 ## Run Metadata
 
@@ -46,9 +46,9 @@
 |-------|-------|
 | model | Mage-Flow-Edit-Turbo |
 | base_model | microsoft/Mage-Flow-Edit-Turbo |
-| generation_time_seconds | 45.141750584123656 |
-| created_at | 2026-07-28T21:22:17.845730 |
+| generation_time_seconds | 40.5 |
+| created_at | 2026-07-28T22:28:10.469672 |
 | image_path | test_10_shoe.png |
 | image_paths | None |
 | image_strength | None |
-| peak_memory_gib | 8.26607609540224 |
+| peak_memory_gib | 8.27 |
