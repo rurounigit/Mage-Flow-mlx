@@ -182,7 +182,7 @@ def main():
 
     # Create LiveReport for real-time terminal output
     verbose = bool(args.metadata)
-    report = LiveReport(title="Mage-Flow MLX", verbose=verbose)
+    report = LiveReport(title="Mage-Flow MLX", verbose=verbose, profiler=prof)
 
     # Real-time callback: report sub-phases as they complete
     # Phases that are explicitly reported via stop_phase (skip in callback)
@@ -194,6 +194,7 @@ def main():
         "python_startup",
         "edit",
         "pipeline_load",
+
         "generation",
         "save_png",
         "dit_load",
@@ -295,7 +296,18 @@ def main():
 
     # --- Edit mode ---
     if args.image is not None:
+        if args.metadata:
+            base_path = os.path.splitext(args.output)[0]
+            prof.metadata_path = base_path
+            prof.metadata = _collect_metadata(
+                model=args.model,
+                image_path=args.image,
+                image_paths=None,
+                generation_time=None,
+                peak_memory_gib=None,
+            )
         _run_edit(args, prof, report)
+
         prof.stop("total_wall_clock")
         # For edit: image_path = target image, image_paths = reference images
         if args.ref_images is None:
@@ -335,9 +347,49 @@ def main():
             report.print_run_metadata(metadata)
         if args.metadata:
             base_path = os.path.splitext(args.output)[0]
-            prof.save_metadata(base_path, metadata)
+            prof.metadata["generation_time_seconds"] = prof.get_elapsed("total_wall_clock")
+            prof.metadata["peak_memory_gib"] = prof.get_peak_rss_gib()
+            prof.overview = [
+                {
+                    "index": 1,
+                    "time": prof.get_elapsed("edit") or 0.0,
+                    "peak_rss_gib": prof.get_max_phase_rss(
+                        "edit",
+                        "text_encode",
+                        "text_encoder_unload",
+                        "dit_step_",
+                        "edit_step_",
+                        "vae_decode",
+                    ) or prof.get_peak_rss_gib(),
+                    "resolution": f"{args.width}x{args.height}",
+                    "steps": args.steps,
+                    "file": args.output,
+                }
+            ]
+            total_time = prof.get_elapsed("total_wall_clock") or 0.0
+            gen_time = prof.get_elapsed("edit") or 0.0
+            prof.summary = {
+                "total_time": total_time,
+                "peak_ram": prof.get_peak_rss_gib() or 0.0,
+                "prompts_count": 1,
+                "overhead": total_time - gen_time,
+            }
+            prof.save_metadata(base_path, prof.metadata, overview=prof.overview, summary=prof.summary)
             print(f"  Metadata saved to {_C.GREEN}{base_path}.json{_C.RESET} and {_C.GREEN}{base_path}.md{_C.RESET}")
         return
+
+
+    # --- Set up incremental save path (so files are written after every phase) ---
+    if args.metadata:
+        base_path = os.path.splitext(args.output)[0]
+        prof.metadata_path = base_path
+        prof.metadata = _collect_metadata(
+            model=args.model,
+            image_path=None,
+            image_paths=None,
+            generation_time=None,
+            peak_memory_gib=None,
+        )
 
     # --- Phase: Load text encoder + tokenizer (DiT + VAE deferred) ---
     # We load only the text encoder first, encode the prompt, unload it,
@@ -345,6 +397,7 @@ def main():
     # on cache miss, because Qwen (~7.5 GiB) is never resident alongside
     # DiT + VAE (~7.9 GiB) simultaneously.
     prof.start("pipeline_load")
+
     try:
         pipeline = MageFlowPipeline.from_pretrained_text_encoder(
             model_dir=args.model,
@@ -551,11 +604,40 @@ def main():
     report.print_run_metadata(metadata)
     if args.metadata:
         base_path = os.path.splitext(args.output)[0]
-        prof.save_metadata(base_path, metadata)
+        prof.metadata["generation_time_seconds"] = prof.get_elapsed("total_wall_clock")
+        prof.metadata["peak_memory_gib"] = prof.get_peak_rss_gib()
+        prof.overview = [
+            {
+                "index": 1,
+                "time": prof.get_elapsed("generation") or 0.0,
+                "peak_rss_gib": prof.get_max_phase_rss(
+                    "generation",
+                    "text_encode",
+                    "text_encoder_unload",
+                    "dit_load",
+                    "vae_load",
+                    "dit_step_",
+                    "vae_decode",
+                ) or prof.get_peak_rss_gib(),
+                "resolution": f"{args.width}x{args.height}",
+                "steps": args.steps,
+                "file": args.output,
+            }
+        ]
+        total_time = prof.get_elapsed("total_wall_clock") or 0.0
+        gen_time = prof.get_elapsed("generation") or 0.0
+        prof.summary = {
+            "total_time": total_time,
+            "peak_ram": prof.get_peak_rss_gib() or 0.0,
+            "prompts_count": 1,
+            "overhead": total_time - gen_time,
+        }
+        prof.save_metadata(base_path, prof.metadata, overview=prof.overview, summary=prof.summary)
         print(f"  Metadata saved to {_C.GREEN}{base_path}.json{_C.RESET} and {_C.GREEN}{base_path}.md{_C.RESET}")
 
 
 def _run_edit(args, prof, report=None):
+
     """Run the image editing pipeline using mflux's MageFlowEdit."""
     from mage_mlx.mflux_src.mflux.models.mage_flow.variants.edit.mage_flow_edit import (
         MageFlowEdit,

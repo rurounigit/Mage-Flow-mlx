@@ -2,8 +2,8 @@
   "metadata": {
     "model": "Mage-Flow-Edit-Turbo",
     "base_model": "microsoft/Mage-Flow-Edit-Turbo",
-    "generation_time_seconds": 38.3735010829987,
-    "created_at": "2026-07-28T13:59:34.686430",
+    "generation_time_seconds": 40.59479712508619,
+    "created_at": "2026-07-28T19:20:34.993333",
     "image_path": "test_10_shoe.png",
     "image_paths": null,
     "image_strength": null,
@@ -12,81 +12,109 @@
   "phases": [
     {
       "name": "python_startup",
-      "elapsed": 2.2292020730674267e-05,
-      "peak_rss_gib": 0.21624755859375,
-      "metadata": {}
+      "elapsed": 2.574990503489971e-05,
+      "peak_rss_gib": 0.21612548828125,
+      "metadata": {},
+      "saved_file": null
     },
     {
       "name": "pipeline_load",
-      "elapsed": 2.3279881249181926,
+      "elapsed": 2.7341382082086056,
       "peak_rss_gib": 8.26607609540224,
-      "metadata": {}
+      "metadata": {},
+      "saved_file": null
     },
     {
       "name": "dit_load",
-      "elapsed": 1.4340436659986153,
+      "elapsed": 1.4420120001304895,
       "peak_rss_gib": 7.9256334491074085,
-      "metadata": {}
+      "metadata": {},
+      "saved_file": null
     },
     {
       "name": "vae_load",
-      "elapsed": 9.59029421210289e-07,
+      "elapsed": 7.499475032091141e-07,
       "peak_rss_gib": 7.9256334491074085,
-      "metadata": {}
+      "metadata": {},
+      "saved_file": null
     },
     {
       "name": "edit_step_1",
-      "elapsed": 6.335318417055532,
+      "elapsed": 6.511094833025709,
       "peak_rss_gib": 7.870887856930494,
-      "metadata": {}
+      "metadata": {},
+      "saved_file": null
     },
     {
       "name": "edit_step_2",
-      "elapsed": 6.1405770420096815,
+      "elapsed": 6.244683624943718,
       "peak_rss_gib": 7.870887856930494,
-      "metadata": {}
+      "metadata": {},
+      "saved_file": null
     },
     {
       "name": "edit_step_3",
-      "elapsed": 6.397325957892463,
+      "elapsed": 6.2254420418757945,
       "peak_rss_gib": 7.870887856930494,
-      "metadata": {}
+      "metadata": {},
+      "saved_file": null
     },
     {
       "name": "edit_step_4",
-      "elapsed": 6.472381750005297,
+      "elapsed": 6.335116083966568,
       "peak_rss_gib": 7.870887856930494,
-      "metadata": {}
+      "metadata": {},
+      "saved_file": null
     },
     {
       "name": "vae_decode",
-      "elapsed": 0.3518439169274643,
+      "elapsed": 1.800669667078182,
       "peak_rss_gib": 7.865074215456843,
-      "metadata": {}
+      "metadata": {},
+      "saved_file": null
     },
     {
       "name": "edit",
-      "elapsed": 35.5492784579983,
+      "elapsed": 37.31748225004412,
       "peak_rss_gib": 7.856285152956843,
       "metadata": {
         "prompt": "change the shoe to deep burgundy polished leather with a translucent smoke-gray sole and subtle chrome details. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
         "resolution": "1024x1024",
         "steps": "4",
         "quantize": "None"
-      }
+      },
+      "saved_file": null
     },
     {
       "name": "save_png",
-      "elapsed": 0.06471470801625401,
+      "elapsed": 0.061384666012600064,
       "peak_rss_gib": 7.856285152956843,
-      "metadata": {}
+      "metadata": {},
+      "saved_file": "test_10_shoe_edited.png"
     },
     {
       "name": "total_wall_clock",
-      "elapsed": 38.3735010829987,
-      "peak_rss_gib": 2.5333251953125,
-      "metadata": {}
+      "elapsed": 40.59479712508619,
+      "peak_rss_gib": 0.5662994384765625,
+      "metadata": {},
+      "saved_file": null
     }
   ],
-  "total_wall_clock": 38.3735010829987
+  "total_wall_clock": 40.59479712508619,
+  "overview": [
+    {
+      "index": 1,
+      "time": 37.31748225004412,
+      "peak_rss_gib": 7.870887856930494,
+      "resolution": "1024x1024",
+      "steps": 4,
+      "file": "test_10_shoe_edited.png"
+    }
+  ],
+  "summary": {
+    "total_time": 40.59479712508619,
+    "peak_ram": 8.26607609540224,
+    "prompts_count": 1,
+    "overhead": 3.277314875042066
+  }
 }

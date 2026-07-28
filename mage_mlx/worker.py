@@ -201,7 +201,24 @@ def run_worker(
     if report and report.verbose:
         print(f"  Loaded {len(prompts)} prompts from {jsonl_path}")
 
+    # Set up incremental save path on profiler (so files are written
+    # after every phase completes, not just at the end)
+    if metadata_enabled and profiler:
+        base_path = os.path.splitext(jsonl_path)[0]
+        profiler.metadata_path = base_path
+        profiler.metadata = {
+            "model": _get_model_name(defaults["model"]),
+            "base_model": _get_base_model(defaults["model"]),
+            "generation_time_seconds": None,
+            "created_at": datetime.now().isoformat(),
+            "image_path": None,
+            "image_paths": None,
+            "image_strength": None,
+            "peak_memory_gib": None,
+        }
+
     # Set up real-time callback for LiveReport
+
     # The callback handles sub-phases (dit_step_N, vae_decode, etc.) in real-time.
     # Main phases are reported explicitly via stop_phase to add saved_file/metadata.
     _EXPLICIT_EXACT = {"dit_load", "vae_load"}
@@ -480,9 +497,56 @@ def run_worker(
 
     if metadata_enabled and profiler:
         base_path = os.path.splitext(jsonl_path)[0]
-        profiler.save_metadata(base_path, metadata, prompts=prompt_metadata)
+        # Update metadata with final values
+        profiler.metadata["generation_time_seconds"] = profiler.get_elapsed("total_wall_clock")
+        profiler.metadata["peak_memory_gib"] = profiler.get_peak_rss_gib()
+        # Build overview from prompt_metadata
+        profiler.overview = [
+            {
+                "index": pm["index"],
+                "time": pm["generation_time_seconds"],
+                "peak_rss_gib": pm["peak_rss_gib"],
+                "resolution": pm["resolution"],
+                "steps": pm["steps"],
+                "file": pm["image_path"],
+            }
+            for pm in prompt_metadata
+        ]
+        # Build summary
+        total_time = profiler.get_elapsed("total_wall_clock") or 0.0
+        sum_gen = sum(
+            pm["generation_time_seconds"]
+            for pm in prompt_metadata
+            if pm["generation_time_seconds"] is not None
+        )
+        text_encode_time = 0.0
+        for rec in profiler.get_records():
+            if rec.elapsed is None:
+                continue
+            if (
+                rec.name.startswith("text_encode")
+                or rec.name == "text_encoder_unload"
+                or rec.name == "dit_load"
+                or rec.name == "vae_load"
+            ):
+                text_encode_time += rec.elapsed
+        overhead = total_time - sum_gen - text_encode_time
+        profiler.summary = {
+            "total_time": total_time,
+            "peak_ram": profiler.get_peak_rss_gib() or 0.0,
+            "prompts_count": len(prompts),
+            "overhead": overhead,
+            "text_encode_time": text_encode_time,
+        }
+        profiler.save_metadata(
+            base_path,
+            profiler.metadata,
+            overview=profiler.overview,
+            summary=profiler.summary,
+        )
 
     return metadata, prompt_metadata
+
 
 
 def _generate_with_cached_embeds(

@@ -37,6 +37,7 @@ class PhaseRecord:
     elapsed: float
     peak_rss_gib: Optional[float] = None
     metadata: dict[str, str] = field(default_factory=dict)
+    saved_file: Optional[str] = None
 
 
 @dataclass
@@ -54,6 +55,15 @@ class Profiler:
     _timers: dict[str, list[float]] = field(default_factory=dict)
     _peak_rss_gib: Optional[float] = None  # max RSS observed across all samples
     on_phase_complete: Optional[callable] = None  # callback(name, elapsed, peak_rss)
+
+    # ── Incremental save attributes ──────────────────────────────────────
+    # When metadata_path is set, the profiler writes md/json files to disk
+    # after every phase completes, so a crash mid-run still leaves a partial
+    # report on disk.
+    metadata_path: Optional[str] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    overview: list[dict[str, Any]] = field(default_factory=list)
+    summary: dict[str, Any] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
     # Memory helpers
@@ -176,7 +186,25 @@ class Profiler:
         # Real-time callback (e.g. LiveReport.start_phase/stop_phase)
         if self.on_phase_complete is not None:
             self.on_phase_complete(name, elapsed, rss)
+        # Incremental save: flush to disk after every phase so a crash
+        # mid-run still leaves a partial report on disk.
+        if self.metadata_path is not None:
+            self.save_metadata(
+                self.metadata_path,
+                self.metadata,
+                overview=self.overview,
+                summary=self.summary,
+            )
         return elapsed
+
+    def set_saved_file(self, name: str, saved_file: str) -> None:
+        """Set the saved_file for a named phase record (for the green arrow)."""
+        if not self.enabled:
+            return
+        for rec in reversed(self._records):
+            if rec.name == name:
+                rec.saved_file = saved_file
+                return
 
     # ------------------------------------------------------------------
     # Reporting
@@ -215,98 +243,18 @@ class Profiler:
         """Return total elapsed time across all recorded phases."""
         return sum(r.elapsed for r in self._records)
 
-    def to_dict(self) -> dict:
-        """Return all phase records as a JSON-serializable dictionary."""
-        return {
-            "phases": [
-                {
-                    "name": rec.name,
-                    "elapsed": rec.elapsed,
-                    "peak_rss_gib": rec.peak_rss_gib,
-                    "metadata": dict(rec.metadata),
-                }
-                for rec in self._records
-            ],
-            "total_wall_clock": self.get_elapsed("total_wall_clock"),
-        }
-
-    def to_markdown(
+    def to_dict(
         self,
-        title: str = "Mage-Flow MLX Profiler",
         metadata: Optional[dict[str, Any]] = None,
-    ) -> str:
-        """Return the report as a markdown string with optional metadata.
+        overview: Optional[list[dict[str, Any]]] = None,
+        summary: Optional[dict[str, Any]] = None,
+    ) -> dict:
+        """Return all phase records as a JSON-serializable dictionary.
 
         Args:
-            title: Title for the profile section.
-            metadata: Optional dict of metadata to render as a table at the top.
-
-        Returns:
-            Markdown-formatted report string.
-        """
-        if not self.enabled or not self._records:
-            return ""
-
-        lines = []
-
-        # Metadata section
-        if metadata:
-            lines.append("## Metadata")
-            lines.append("")
-            lines.append("| Field | Value |")
-            lines.append("|-------|-------|")
-            for key, value in metadata.items():
-                lines.append(f"| {key} | {value} |")
-            lines.append("")
-
-        # Profile data section
-        lines.append(f"## {title}")
-        lines.append("")
-        lines.append("| Phase | Time (s) | Peak RSS (GiB) | Metadata |")
-        lines.append("|-------|----------|----------------|----------|")
-
-        for rec in self._records:
-            # total_wall_clock is the final result, not an action — no peak RSS
-            if rec.name == "total_wall_clock":
-                rss_str = ""
-            else:
-                rss_str = f"{rec.peak_rss_gib:.2f}" if rec.peak_rss_gib is not None else "N/A"
-            lines.append(f"| {rec.name} | {rec.elapsed:.4f} | {rss_str} | |")
-            # Each metadata key-value pair on its own line, no indentation
-            if rec.metadata:
-                for k, v in rec.metadata.items():
-                    lines.append(f"{k}={v}")
-
-        # Show total only if total_wall_clock is NOT already in the records
-        has_total = any(r.name == "total_wall_clock" for r in self._records)
-        if not has_total:
-            lines.append("|-------|----------|----------------|----------|")
-            lines.append(
-                f"| **Sum of all phases** | **{sum(r.elapsed for r in self._records):.4f}** | | |"
-            )
-        lines.append("")
-        lines.append("*Note: phase times are nested; child phases are subsets of parent phases.*")
-
-        return "\n".join(lines)
-
-    def save_metadata(
-        self,
-        path: str,
-        metadata: Optional[dict[str, Any]] = None,
-        title: str = "Mage-Flow MLX Profiler",
-        prompts: Optional[list[dict]] = None,
-    ) -> None:
-        """Save profile data with metadata as both JSON and markdown files.
-
-        Creates two files:
-            - ``path + ".json"`` — JSON with metadata, phases, and total
-            - ``path + ".md"`` — markdown with metadata table + profile table
-
-        Args:
-            path: Base path (without extension) for the output files.
-            metadata: Optional dict of run-level metadata.
-            title: Title for the profile section in the markdown file.
-            prompts: Optional list of per-prompt metadata dicts (worker mode).
+            metadata: Optional run-level metadata dict.
+            overview: Optional list of per-prompt overview dicts.
+            summary: Optional summary dict (total_time, peak_ram, etc.).
         """
         data = {
             "metadata": metadata or {},
@@ -316,13 +264,150 @@ class Profiler:
                     "elapsed": rec.elapsed,
                     "peak_rss_gib": rec.peak_rss_gib,
                     "metadata": dict(rec.metadata),
+                    "saved_file": rec.saved_file,
                 }
                 for rec in self._records
             ],
             "total_wall_clock": self.get_elapsed("total_wall_clock"),
         }
-        if prompts:
-            data["prompts"] = prompts
+        if overview:
+            data["overview"] = overview
+        if summary:
+            data["summary"] = summary
+        return data
+
+    def to_markdown(
+        self,
+        metadata: Optional[dict[str, Any]] = None,
+        overview: Optional[list[dict[str, Any]]] = None,
+        summary: Optional[dict[str, Any]] = None,
+    ) -> str:
+        """Return the report as a markdown string matching the terminal output.
+
+        The markdown structure mirrors the terminal output order:
+        1. Phase table (with saved_file column and per-phase metadata)
+        2. Summary section (total time, peak RAM, prompts count)
+        3. Overview table (per-prompt results)
+        4. Overhead row (and text encode/decode row for worker mode)
+        5. Run Metadata block
+
+        Args:
+            metadata: Optional run-level metadata dict (for the Run Metadata block).
+            overview: Optional list of per-prompt overview dicts.
+            summary: Optional summary dict (total_time, peak_ram, prompts_count,
+                     overhead, text_encode_time).
+
+        Returns:
+            Markdown-formatted report string.
+        """
+        if not self.enabled or not self._records:
+            return ""
+
+        lines = []
+
+        # ── Phase table ──────────────────────────────────────────────
+        lines.append("## Phases")
+        lines.append("")
+        lines.append("| Phase | Time (s) | Peak RSS (GiB) | Saved File | Metadata |")
+        lines.append("|-------|----------|----------------|------------|----------|")
+
+        for rec in self._records:
+            if rec.name == "total_wall_clock":
+                rss_str = ""
+            else:
+                rss_str = f"{rec.peak_rss_gib:.2f}" if rec.peak_rss_gib is not None else "N/A"
+            saved_str = rec.saved_file or ""
+            lines.append(f"| {rec.name} | {rec.elapsed:.4f} | {rss_str} | {saved_str} | |")
+            if rec.metadata:
+                for k, v in rec.metadata.items():
+                    lines.append(f"{k}={v}")
+
+        has_total = any(r.name == "total_wall_clock" for r in self._records)
+        if not has_total:
+            lines.append("|-------|----------|----------------|------------|----------|")
+            lines.append(
+                f"| **Sum of all phases** | **{sum(r.elapsed for r in self._records):.4f}** | | | |"
+            )
+        lines.append("")
+        lines.append("*Note: phase times are nested; child phases are subsets of parent phases.*")
+        lines.append("")
+
+        # ── Summary section ──────────────────────────────────────────
+        if summary:
+            lines.append("## Summary")
+            lines.append("")
+            lines.append("| Metric | Value |")
+            lines.append("|--------|-------|")
+            total_time = summary.get("total_time", 0.0)
+            peak_ram = summary.get("peak_ram", 0.0)
+            prompts_count = summary.get("prompts_count", 0)
+            lines.append(f"| Total time | {total_time:.4f} |")
+            lines.append(f"| Peak RAM | {peak_ram:.2f} |")
+            lines.append(f"| Prompts | {prompts_count} |")
+            lines.append("")
+
+        # ── Overview table ──────────────────────────────────────────
+        if overview:
+            lines.append("## Overview")
+            lines.append("")
+            lines.append("| # | Time (s) | Peak RSS (GiB) | Resolution | Steps | File |")
+            lines.append("|---|----------|----------------|------------|-------|------|")
+            for row in overview:
+                idx = row.get("index", "—")
+                t = row.get("time")
+                t_str = f"{t:.4f}" if t is not None else "—"
+                r = row.get("peak_rss_gib")
+                r_str = f"{r:.2f}" if r is not None else "—"
+                res = row.get("resolution", "—")
+                steps = row.get("steps", "—")
+                file = row.get("file", "—")
+                lines.append(f"| {idx} | {t_str} | {r_str} | {res} | {steps} | {file} |")
+
+            # Text encode / decode row (worker mode)
+            if summary and summary.get("text_encode_time", 0) > 0:
+                te_time = summary["text_encode_time"]
+                te_ram = summary.get("text_encode_ram")
+                te_ram_str = f"{te_ram:.2f}" if te_ram is not None else "—"
+                lines.append(f"| — | {te_time:.4f} | {te_ram_str} | — | — | text encode / decode |")
+
+            # Overhead row
+            if summary and summary.get("overhead", 0) > 0:
+                oh = summary["overhead"]
+                lines.append(f"| — | {oh:.4f} | — | — | — | overhead (load + encode + decode) |")
+            lines.append("")
+
+        # ── Run Metadata block ──────────────────────────────────────
+        if metadata:
+            lines.append("## Run Metadata")
+            lines.append("")
+            lines.append("| Field | Value |")
+            lines.append("|-------|-------|")
+            for key, value in metadata.items():
+                lines.append(f"| {key} | {value} |")
+            lines.append("")
+
+        return "\n".join(lines)
+
+    def save_metadata(
+        self,
+        path: str,
+        metadata: Optional[dict[str, Any]] = None,
+        overview: Optional[list[dict[str, Any]]] = None,
+        summary: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """Save profile data with metadata as both JSON and markdown files.
+
+        Creates two files:
+            - ``path + ".json"`` — JSON with metadata, phases, overview, summary
+            - ``path + ".md"`` — markdown matching the terminal output structure
+
+        Args:
+            path: Base path (without extension) for the output files.
+            metadata: Optional dict of run-level metadata.
+            overview: Optional list of per-prompt overview dicts.
+            summary: Optional summary dict (total_time, peak_ram, etc.).
+        """
+        data = self.to_dict(metadata, overview, summary)
 
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
 
@@ -333,7 +418,7 @@ class Profiler:
 
         # Save markdown
         md_path = path + ".md"
-        md_content = self.to_markdown(title, metadata)
+        md_content = self.to_markdown(metadata, overview, summary)
         with open(md_path, "w") as f:
             f.write(md_content)
 
@@ -371,18 +456,15 @@ class Profiler:
         lines.append("  " + "-" * 64)
 
         for rec in self._records:
-            # total_wall_clock is the final result, not an action — no peak RSS
             if rec.name == "total_wall_clock":
                 rss_str = " " * 14
             else:
                 rss_str = f"{rec.peak_rss_gib:>14.2f}" if rec.peak_rss_gib is not None else "              N/A"
             lines.append(f"  {rec.name:<40} {rec.elapsed:>10.4f}   {rss_str}")
-            # Each metadata key-value pair on its own line, no indentation
             if rec.metadata:
                 for k, v in rec.metadata.items():
                     lines.append(f"{k}={v}")
 
-        # Show total only if total_wall_clock is NOT already in the records
         has_total = any(r.name == "total_wall_clock" for r in self._records)
         if not has_total:
             lines.append("  " + "-" * 64)
@@ -515,7 +597,7 @@ class LiveReport:
     - 70-char wide cyan bold separators
     - Dim column headers
     - Magenta bold prompt headers
-    - Green arrow (→) for saved files
+    - Green arrow (->) for saved files
     - Relative green/red coloring for times in the summary
     - Cyan for RAM and total time
     - No redundant table — real-time output IS the table
@@ -526,12 +608,13 @@ class LiveReport:
     min/max are not known until all phases complete.
     """
 
-    def __init__(self, title: str = "Mage-Flow MLX", verbose: bool = True):
+    def __init__(self, title: str = "Mage-Flow MLX", verbose: bool = True, profiler=None):
         self.title = title
         self.verbose = verbose
         self.phases: list[_PhaseRow] = []
         self.prompts: list[_PromptRow] = []
         self._phase_times: list[float] = []  # for relative color scaling
+        self.profiler = profiler  # reference for incremental saves
         self._print_header()
 
     # ── header ──
@@ -601,6 +684,10 @@ class LiveReport:
         if elapsed is not None:
             self._phase_times.append(elapsed)
 
+        # Sync saved_file to profiler record for md/json output
+        if self.profiler is not None and saved_file is not None:
+            self.profiler.set_saved_file(name, saved_file)
+
         if not self.verbose:
             self.progress_bar(name)
             return
@@ -631,11 +718,9 @@ class LiveReport:
 
         should_print_separator = False
         if is_block_phase:
-            # Separator before first block phase (if previous was not a block phase)
             if not prev_was_block:
                 should_print_separator = True
         else:
-            # Separator before non-block phases (always, gives separation after blocks)
             should_print_separator = True
 
         if should_print_separator:
@@ -673,7 +758,6 @@ class LiveReport:
             if rec.name in reported:
                 continue
             self.stop_phase(rec.name, rec.elapsed or 0.0, rec.peak_rss_gib)
-            # Report any metadata set on this phase
             for key, value in profiler.get_metadata(rec.name).items():
                 self.add_metadata(rec.name, key, value)
             reported.add(rec.name)
@@ -691,30 +775,23 @@ class LiveReport:
             self.phases.append(row)
         row.metadata[key] = value
 
-        # Build the prefix: "  key:" with ANSI color codes
         prefix = f"  {_C.YELLOW}{key}{_C.RESET}:"
-        # Visible prefix length (without ANSI codes) for indentation
         visible_prefix = f"  {key}:"
         indent_len = len(visible_prefix)
 
-        # Get terminal width, fall back to 80 if unavailable
         try:
             term_width = shutil.get_terminal_size().columns
         except Exception:
             term_width = 80
 
-        # Wrap the value to fit within the terminal width
         wrap_width = max(20, term_width - indent_len)
         wrapped_lines = textwrap.wrap(value, width=wrap_width)
 
         if wrapped_lines:
-            # First line with the prefix
             print(f"{prefix}{wrapped_lines[0]}")
-            # Subsequent lines indented to match the prefix
             for line in wrapped_lines[1:]:
                 print(f"{' ' * indent_len}{line}")
         else:
-            # Empty value
             print(prefix)
 
     # ── prompt header ──
@@ -736,7 +813,7 @@ class LiveReport:
         peak_rss_gib: Optional[float],
         saved_file: Optional[str],
     ) -> None:
-        """Add a per-prompt summary row."""
+        """Add a per-prompt summary row and trigger incremental save."""
         pr = _PromptRow(
             index=index,
             prompt=prompt,
@@ -748,6 +825,26 @@ class LiveReport:
             saved_file=saved_file,
         )
         self.prompts.append(pr)
+
+        # Update profiler overview and trigger incremental save
+        if self.profiler is not None and self.profiler.metadata_path is not None:
+            self.profiler.overview = [
+                {
+                    "index": p.index,
+                    "time": p.generation_time,
+                    "peak_rss_gib": p.peak_rss_gib,
+                    "resolution": p.resolution,
+                    "steps": p.steps,
+                    "file": p.saved_file,
+                }
+                for p in self.prompts
+            ]
+            self.profiler.save_metadata(
+                self.profiler.metadata_path,
+                self.profiler.metadata,
+                overview=self.profiler.overview,
+                summary=self.profiler.summary,
+            )
 
     # ── final summary ──
     def print_summary(self, total_time: float, peak_ram: float, show_text_encode: bool = False) -> None:
@@ -781,7 +878,6 @@ class LiveReport:
             print(f"{_C.BOLD}  Overview:{_C.RESET}")
             print(f"{_C.DIM}  {'#':>3}  {'Time':>8}   {'Peak RAM':>10}   {'Resolution':>12}   {'Steps':>5}   File{_C.RESET}")
             print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
-            # Use generation times only for relative coloring
             gen_times = [p.generation_time for p in self.prompts if p.generation_time is not None]
             if gen_times:
                 t_min = min(gen_times)
@@ -800,11 +896,6 @@ class LiveReport:
                     f"{p.resolution:>12}   {p.steps:>5}   {file_str}"
                 )
 
-            # In worker mode, show a "text encode / decode" row that sums
-            # the text_encode*, text_encoder_unload, dit_load, and vae_load
-            # phases. This highlights the worker's architecture: Qwen is
-            # loaded once, all prompts are encoded, then Qwen is unloaded,
-            # and only then are DiT/VAE loaded.
             sum_gen = sum(p.generation_time for p in self.prompts if p.generation_time is not None)
             text_encode_time = 0.0
             text_encode_ram: Optional[float] = None
@@ -834,8 +925,6 @@ class LiveReport:
                         f"{'—':>12}   {'—':>5}   {_C.GRAY}text encode / decode{_C.RESET}"
                     )
 
-            # Overhead row: total wall clock minus sum of generation times
-            # (and minus text encode/decode if shown)
             overhead = total_time - sum_gen
             if show_text_encode:
                 overhead -= text_encode_time
@@ -847,8 +936,6 @@ class LiveReport:
                     f"{'—':>12}   {'—':>5}   {_C.GRAY}overhead (load + encode + decode){_C.RESET}"
                 )
             print()
-
-        # No redundant phase timings table — already shown in real-time
 
         print(f"{_C.BOLD}{_C.CYAN}{'=' * 70}{_C.RESET}")
         print()
