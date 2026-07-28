@@ -366,7 +366,7 @@ def ensure_mlx_model(
         del mlx_te
         gc.collect()
 
-        print(f"✅ Auto-conversion complete! Weights cached at {output_dir}")
+        print(f"Auto-conversion complete! Weights cached at {output_dir}")
     else:
         pass  # Weights already cached, no need to print
 
