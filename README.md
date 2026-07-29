@@ -458,6 +458,8 @@ The text encoder and DiT briefly coexist while prompts are encoded. Afterward, t
 
 This project is a port of Microsoft's Mage-Flow. See the original [Mage repository](https://github.com/microsoft/Mage) for the original implementation and license.
 
+The image editing mode is based on the Mage-Flow edit PR for [mflux](https://github.com/mfluxml/mflux) by [Ivan Fioravanti](https://github.com/ivanfioravanti).
+
 ## Development Log
 
 The `memlog/` directory contains a detailed development log documenting the iterative optimization process, including:
