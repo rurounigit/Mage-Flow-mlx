@@ -690,8 +690,8 @@ class LiveReport:
         Overwrites itself on the same line using \\033[K to clear line.
         """
         count = len(self.phases)
-        bar = '█' * count
-        print(f"\r\033[K  [{bar}] {count} events — {name}", end="", flush=True)
+        bar = '█' * (count * 2)
+        print(f"\r\033[K  [{bar}] {name}", end="", flush=True)
 
     # ── phase lifecycle ──
     def start_phase(self, name: str) -> None:
@@ -831,6 +831,10 @@ class LiveReport:
             self.phases.append(row)
         row.metadata[key] = value
 
+        # In non-verbose mode, don't print (would break the single-line progress bar)
+        if not self.verbose:
+            return
+
         prefix = f"  {_C.YELLOW}{key}{_C.RESET}:"
         visible_prefix = f"  {key}:"
         indent_len = len(visible_prefix)
@@ -905,6 +909,14 @@ class LiveReport:
                 summary=self.profiler.summary,
             )
 
+    # ── finish ──
+    def finish(self) -> None:
+        """Print 100% on the progress bar line, replacing the phase name."""
+        if not self.verbose:
+            count = len(self.phases)
+            bar = '█' * (count * 2)
+            print(f"\r\033[K  [{bar}] {_C.GREEN}100%{_C.RESET}", end="", flush=True)
+
     # ── final summary ──
     def print_summary(self, total_time: float, peak_ram: float, show_text_encode: bool = False) -> None:
         """Print the final summary section with per-prompt results table.
@@ -919,6 +931,7 @@ class LiveReport:
                 (startup + save) time.
         """
         if not self.verbose:
+            self.finish()
             print()  # Final newline to complete the \r progress bar
         print()
         print(f"{_C.BOLD}{_C.CYAN}{'─' * 70}{_C.RESET}")
