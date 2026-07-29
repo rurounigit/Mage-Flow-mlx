@@ -759,7 +759,6 @@ def run_edit_worker(
     _EXPLICIT_PREFIXES = (
         "pipeline_load", "text_encoder_unload", "text_encode_",
         "generation_", "save_", "total_wall_clock", "python_startup",
-        "edit_step_", "vae_decode",
     )
     if report and profiler:
         def _on_phase_complete(name, elapsed, rss):

@@ -190,3 +190,26 @@ peak: 8.27 GiB
 `test_prompts_edit.json` and `test_prompts_edit.md` were regenerated. Missing
 and malformed image CLI cases were also run: each emitted a line-specific
 warning, processed zero prompts, loaded no model, and created no image output.
+
+### Terminal output regression restored
+
+A follow-up issue reported that the per-step DiT layer timings had been
+removed from the edit worker terminal output. Investigation found that
+`run_edit_worker` in `mage_mlx/worker.py` listed `"edit_step_"` and
+`"vae_decode"` in `_EXPLICIT_PREFIXES`, causing the real-time callback
+to skip them. The original `bb898d2` implementation did not include
+these in the filter.
+
+Fix: removed `"edit_step_"` and `"vae_decode"` from `_EXPLICIT_PREFIXES`
+in `run_edit_worker` so each DiT step and VAE decode is reported in real
+time via the callback.
+
+Verified output now shows per-step timings:
+
+```
+  edit_step_1                                    4.1s      7.87GiB
+  edit_step_2                                    3.7s      7.87GiB
+  edit_step_3                                    3.8s      7.87GiB
+  edit_step_4                                    3.9s      7.87GiB
+  vae_decode                                     1.2s      7.86GiB
+```
