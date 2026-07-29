@@ -97,8 +97,7 @@ python generate.py [OPTIONS]
 | `--output PATH` | `none` | Output image path. Bare filename → `output/` subfolder; absolute path with filename → saved there; absolute path without filename → default name from metadata (resolution, steps, seed, quantize) + unique ID; omitted → default name in `output/` subfolder. Existing files are silently overwritten. |
 | `--quantize INT` | none | Use a persistent 4- or 8-bit DiT cache. The variant is created atomically on first use and reused afterward. The canonical checkpoint stays BF16; boundary, modulation, and the sensitive final image MLP expansion remain BF16 inside each mixed-precision variant. |
 | `--worker PATH` | none | Run in persistent JSONL worker mode. Models (DiT, VAE, tokenizer) stay resident across all prompts in the file. Uses prompt queue mode: Qwen is loaded once, all prompts are text-encoded, then Qwen is unloaded. Repeated prompts with the same text skip Qwen entirely via the embedding cache. |
-| `--profile` | none | Enable phase-level timing and peak memory profiling. Prints a detailed report at the end of generation. |
-| `--benchmark-cleanup` | none | Benchmark text encoder cleanup strategies (unload only, unload+gc, unload+cache, all three). Runs a single generation with each strategy and reports timing. |
+| `--metadata` | none | Enable phase-level profiling, print terminal report, and save JSON + markdown files |
 
 ### Examples
 
@@ -132,7 +131,7 @@ cat > prompts.jsonl << 'EOF'
 EOF
 
 # Run the worker with profiling
-python generate.py --worker prompts.jsonl --quantize 4 --profile
+python generate.py --worker prompts.jsonl --quantize 4 --metadata
 ```
 
 JSONL format (one JSON object per line):
@@ -248,19 +247,6 @@ Three loading modes are available:
 - `generate()` — Full pipeline: encode → unload Qwen → load DiT/VAE → denoise → decode
 - `_generate_from_embeds()` — Bypass text encoding entirely; used by the worker when embeddings are cached or pre-encoded in batch. Eliminates allocation churn that made the first DiT step of subsequent prompts 2-4× slower.
 
-### Cleanup Strategies
-
-After text encoding, Qwen can be cleaned up with one of four strategies:
-
-| Strategy | Description |
-|---|---|
-| `"unload_only"` | Just unload Qwen (fastest) |
-| `"unload+gc"` | Unload + `gc.collect()` |
-| `"unload+cache"` | Unload + `mx.clear_cache()` |
-| `"all_three"` | All three (default) |
-
-The `--benchmark-cleanup` flag benchmarks all four strategies.
-
 ## Quantization
 
 Runtime quantization with quality-safe layer selection:
@@ -359,7 +345,7 @@ python generate.py --prompt "..." --image target.png --renormalization
 
 ### Phase-Level Profiler
 
-The `--profile` flag instruments every phase of generation:
+The `--metadata` flag instruments every phase of generation:
 
 - Python/import startup
 - DiT load, VAE load, text encoder load
