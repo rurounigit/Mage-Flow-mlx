@@ -3,6 +3,7 @@ venv/
 models/
 *.safetensors
 *.png
+output/
 __pycache__/
 *.pyc
 .DS_Store

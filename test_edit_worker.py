@@ -24,6 +24,7 @@ from mage_mlx.worker import (
     VALID_PARAMS,
     _hash_image_bytes,
 )
+from mage_mlx.output_resolver import resolve_output_path
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +53,7 @@ class TestLoadEditPrompts:
         assert prompts[0]["prompt"] == "make it red"
         assert prompts[0]["image"] == str(img)
         assert prompts[0]["ref_images"] == []
-        assert prompts[0]["output"] == "edit_output_1.png"
+        assert prompts[0]["output"] is None  # no output → resolved later by resolve_output_path
 
     def test_valid_prompt_with_ref_images(self, tmp_path):
         """A valid prompt with ref_images list should load correctly."""
@@ -295,6 +296,75 @@ class TestEditValidParams:
         """Edit params should include image and ref_images."""
         assert "image" in EDIT_VALID_PARAMS
         assert "ref_images" in EDIT_VALID_PARAMS
+
+
+# ---------------------------------------------------------------------------
+# resolve_output_path
+# ---------------------------------------------------------------------------
+
+class TestResolveOutputPath:
+    """Tests for the unified output path resolver."""
+
+    def test_bare_filename_goes_to_output_dir(self, tmp_path, monkeypatch):
+        """A bare filename should resolve to output/<filename>."""
+        monkeypatch.chdir(tmp_path)
+        result = resolve_output_path("image.png")
+        assert result == "output/image.png"
+        assert os.path.exists("output")
+
+    def test_absolute_path_with_filename(self, tmp_path):
+        """An absolute path with a filename should be used as-is."""
+        target = str(tmp_path / "subdir" / "img.png")
+        result = resolve_output_path(target)
+        assert result == target
+        assert os.path.exists(str(tmp_path / "subdir"))
+
+    def test_absolute_path_without_filename(self, tmp_path):
+        """An absolute path without a filename should get a default name."""
+        target_dir = str(tmp_path / "results") + "/"
+        result = resolve_output_path(target_dir, width=512, height=512, steps=8, seed=99, quantize=4)
+        assert result.startswith(target_dir)
+        assert result.endswith(".png")
+        # Default filename includes resolution, steps, seed, quantize
+        basename = os.path.basename(result)
+        assert "512x512" in basename
+        assert "s8" in basename
+        assert "seed99" in basename
+        assert "q4" in basename
+        assert os.path.exists(target_dir)
+
+    def test_none_output_goes_to_output_dir(self, tmp_path, monkeypatch):
+        """None output should resolve to output/<default_name>."""
+        monkeypatch.chdir(tmp_path)
+        result = resolve_output_path(None, width=1024, height=1024, steps=4, seed=42, quantize=None)
+        assert result.startswith("output/")
+        assert result.endswith(".png")
+        basename = os.path.basename(result)
+        assert "1024x1024" in basename
+        assert "s4" in basename
+        assert "seed42" in basename
+        assert "f16" in basename  # None quantize → f16
+
+    def test_none_output_with_quantize(self, tmp_path, monkeypatch):
+        """None output with quantize=8 should include q8 in filename."""
+        monkeypatch.chdir(tmp_path)
+        result = resolve_output_path(None, quantize=8)
+        basename = os.path.basename(result)
+        assert "q8" in basename
+
+    def test_unique_identifier_in_default_filename(self, tmp_path, monkeypatch):
+        """Two calls with same metadata should produce different filenames."""
+        monkeypatch.chdir(tmp_path)
+        r1 = resolve_output_path(None)
+        r2 = resolve_output_path(None)
+        assert r1 != r2  # UUID suffix guarantees uniqueness
+
+    def test_creates_nested_directory(self, tmp_path):
+        """The resolver should create nested directories that don't exist."""
+        target = str(tmp_path / "a" / "b" / "c" / "img.png")
+        result = resolve_output_path(target)
+        assert result == target
+        assert os.path.exists(str(tmp_path / "a" / "b" / "c"))
 
 
 # ---------------------------------------------------------------------------

@@ -94,7 +94,7 @@ python generate.py [OPTIONS]
 | `--seed INTEGER` | `42` | Random seed used for initial latent noise. Reusing the same seed and parameters reproduces the same MLX result. |
 | `--guidance FLOAT` | `1.0` | Classifier-free guidance (CFG) scale. `1.0` disables CFG and performs one DiT pass per step. Values above 1 strengthen prompt adherence but very high values can oversaturate or reduce natural detail. |
 | `--negative-prompt TEXT` | one space (`" "`) | Text for the unconditional/negative CFG branch. It is only used when `--guidance` is greater than 1. |
-| `--output PATH` | `output.png` | Destination image path. The format is inferred from the extension by Pillow. |
+| `--output PATH` | `none` | Output image path. Bare filename → `output/` subfolder; absolute path with filename → saved there; absolute path without filename → default name from metadata (resolution, steps, seed, quantize) + unique ID; omitted → default name in `output/` subfolder. Existing files are silently overwritten. |
 | `--quantize INT` | none | Use a persistent 4- or 8-bit DiT cache. The variant is created atomically on first use and reused afterward. The canonical checkpoint stays BF16; boundary, modulation, and the sensitive final image MLP expansion remain BF16 inside each mixed-precision variant. |
 | `--worker PATH` | none | Run in persistent JSONL worker mode. Models (DiT, VAE, tokenizer) stay resident across all prompts in the file. Uses prompt queue mode: Qwen is loaded once, all prompts are text-encoded, then Qwen is unloaded. Repeated prompts with the same text skip Qwen entirely via the embedding cache. |
 | `--profile` | none | Enable phase-level timing and peak memory profiling. Prints a detailed report at the end of generation. |
@@ -141,7 +141,7 @@ JSONL format (one JSON object per line):
 | Field | Required | Description |
 |---|---|---|
 | `prompt` | yes | Text prompt |
-| `output` | no | Output path (default: `output_N.png`) |
+| `output` | no | Output path (resolved at save time; bare filename → output/ subfolder, omitted → default name in output/) |
 | `seed` | no | Random seed (default: 42) |
 | `guidance` | no | CFG scale (default: 1.0) |
 | `width` | no | Output width (default: 1024) |
@@ -238,6 +238,7 @@ mage-flow-mlx/
 │   ├── pipeline.py         # MageFlowPipeline (end-to-end)
 │   ├── profiler.py         # Phase-level timing and memory profiler
 │   ├── embedding_cache.py  # Prompt embedding cache (skip Qwen load on cache hit)
+│   ├── output_resolver.py  # Unified output path resolution across all modes
 │   └── worker.py           # Persistent JSONL worker (models stay resident)
 └── README.md
 ```

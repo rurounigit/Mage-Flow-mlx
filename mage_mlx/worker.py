@@ -37,6 +37,7 @@ from typing import Any, Optional
 import mlx.core as mx
 
 from .profiler import Profiler
+from .output_resolver import resolve_output_path
 from mage_mlx.mflux_src.mflux.models.mage_flow.variants.conditioning import MageFlowConditioning
 
 
@@ -102,7 +103,7 @@ def load_prompts(jsonl_path: str) -> list[dict[str, Any]]:
                 print(f"  WARNING: Skipping line {line_num}: missing 'prompt' field")
                 continue
             if "output" not in prompt:
-                prompt["output"] = f"output_{line_num}.png"
+                prompt["output"] = None
 
             # Validate parameter names
             invalid = set(prompt.keys()) - VALID_PARAMS
@@ -442,6 +443,17 @@ def run_worker(
         if report:
             report.stop_phase(f"generation_{i + 1}", profiler.get_elapsed(f"generation_{i + 1}") or 0.0, profiler.get_phase_rss(f"generation_{i + 1}"))
 
+        # Resolve output path (unified across all modes)
+        params["output"] = resolve_output_path(
+            output=params.get("output"),
+            width=params["width"],
+            height=params["height"],
+            steps=params["steps"],
+            seed=params["seed"],
+            quantize=params.get("quantize"),
+            mode="txt2img",
+        )
+
         # Save image
         if profiler:
             profiler.start(f"save_{i + 1}")
@@ -650,7 +662,7 @@ def load_edit_prompts(jsonl_path: str) -> list[dict[str, Any]]:
 
             # Default output
             if "output" not in prompt:
-                prompt["output"] = f"edit_output_{line_num}.png"
+                prompt["output"] = None
 
             # Validate parameter names
             invalid = set(prompt.keys()) - EDIT_VALID_PARAMS
@@ -1191,6 +1203,17 @@ def run_edit_worker(
                 profiler.get_elapsed(f"generation_{i + 1}") or 0.0,
                 profiler.get_phase_rss(f"generation_{i + 1}"),
             )
+
+        # Resolve output path (unified across all modes)
+        params["output"] = resolve_output_path(
+            output=params.get("output"),
+            width=params["width"],
+            height=params["height"],
+            steps=params["steps"],
+            seed=params["seed"],
+            quantize=params.get("quantize"),
+            mode="edit",
+        )
 
         # Save image
         if profiler:

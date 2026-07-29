@@ -111,8 +111,11 @@ def main():
         help="Negative prompt used by CFG"
     )
     parser.add_argument(
-        "--output", type=str, default="output.png",
-        help="Output image path"
+        "--output", type=str, default=None,
+        help="Output image path. Bare filename → output/ subfolder; "
+             "absolute path with filename → saved there; "
+             "absolute path without filename → default name generated; "
+             "omitted → default name in output/ subfolder"
     )
     parser.add_argument(
         "--quantize", type=int, default=None, choices=[4, 8],
@@ -349,6 +352,23 @@ def main():
         if args.metadata:
             prof.print_report()
         return
+
+    # --- Resolve output path (unified across all single/edit modes) ---
+    # If --output is a bare filename → output/ subfolder
+    # If --output is an absolute path with filename → use as-is
+    # If --output is an absolute path without filename → generate default name
+    # If --output is None → generate default name in output/ subfolder
+    from mage_mlx.output_resolver import resolve_output_path
+
+    args.output = resolve_output_path(
+        output=args.output,
+        width=args.width,
+        height=args.height,
+        steps=args.steps,
+        seed=args.seed,
+        quantize=args.quantize,
+        mode="edit" if args.image is not None else "txt2img",
+    )
 
     # --- Edit mode ---
     if args.image is not None:
