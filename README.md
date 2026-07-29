@@ -2,23 +2,23 @@
 
 Native Apple Silicon port of Microsoft's **Mage-Flow** (4B MMDiT) using [MLX](https://github.com/ml-explore/mlx).
 
-## Overview
+## What This Is
 
-Mage-Flow is a compact 4B-scale generative stack for text-to-image generation, built from:
+Mage-Flow is a compact 4B-parameter generative stack for text-to-image generation and image editing, built from:
 
 - **Mage-VAE** — lightweight high-fidelity latent tokenizer (16× downsample, 128 latent channels)
 - **NR-MMDiT** — 4B Native-Resolution Multimodal Diffusion Transformer (12 double_stream blocks, 2D multi-scale RoPE)
 - **Qwen3-VL** — text encoder (2560 hidden, 36 layers, 32Q/8KV heads)
 
-This port translates the PyTorch/CUDA implementation to native MLX, running entirely on Apple Silicon.
+This port translates the PyTorch/CUDA implementation to native MLX, running entirely on Apple Silicon. No PyTorch or CUDA is needed at inference time — only MLX.
 
 ## Requirements
 
-- **Mac**: M1/M2/M3/M4/M5 series (Apple Silicon)
-- **RAM**: 24 GB recommended
-- **Disk**: about 17 GB for converted BF16 weights, plus the Hugging Face cache;
+- **Mac:** M1/M2/M3/M4/M5 series (Apple Silicon)
+- **RAM:** 24 GB recommended
+- **Disk:** about 17 GB for converted BF16 weights, plus the Hugging Face cache;
   optional persistent DiT caches add about 4.2 GB (4-bit) and 5.5 GB (8-bit)
-- **Python**: 3.11+
+- **Python:** 3.11+
 
 ## Quick Start
 
@@ -40,7 +40,7 @@ cached separately without modifying the canonical checkpoint.
 
 ### Automatic Model Download & Conversion
 
-You no longer need to run `convert_weights.py` manually. When you run `generate.py`, the pipeline will:
+You do not need to run `convert_weights.py` manually. When you run `generate.py`, the pipeline will:
 
 1. Check if converted MLX weights exist locally (default: `models/microsoft_Mage-Flow-Turbo/`)
 2. If missing, automatically download the raw PyTorch weights from HuggingFace (`microsoft/Mage-Flow-Turbo`)
@@ -78,14 +78,14 @@ If you prefer to pre-convert weights manually (e.g., for offline use or custom r
 python convert_weights.py --repo microsoft/Mage-Flow-Turbo --output models/microsoft_Mage-Flow-Turbo
 ```
 
-## Generation parameters
+## Generation Parameters
 
 ```text
 python generate.py [OPTIONS]
 ```
 
 | Parameter | Default | Description |
-|---|---:|---|
+|---|---|---|
 | `--prompt TEXT` | required | Description of the image to generate. Concrete subjects, composition, lighting, and style generally produce the most predictable result. |
 | `--model PATH` | `models/microsoft_Mage-Flow-Turbo` | Directory containing converted MLX weights, or a HuggingFace repo ID (e.g. `microsoft/Mage-Flow-Turbo`). On first run, weights are auto-downloaded and converted. |
 | `--steps INTEGER` | `4` | Number of flow-matching denoising steps. Mage-Flow-Turbo is trained for four steps; increasing this is not guaranteed to improve quality and changes the scheduler trajectory. |
@@ -99,7 +99,6 @@ python generate.py [OPTIONS]
 | `--worker PATH` | none | Run in persistent JSONL worker mode. Models (DiT, VAE, tokenizer) stay resident across all prompts in the file. Uses prompt queue mode: Qwen is loaded once, all prompts are text-encoded, then Qwen is unloaded. Repeated prompts with the same text skip Qwen entirely via the embedding cache. |
 | `--profile` | none | Enable phase-level timing and peak memory profiling. Prints a detailed report at the end of generation. |
 | `--benchmark-cleanup` | none | Benchmark text encoder cleanup strategies (unload only, unload+gc, unload+cache, all three). Runs a single generation with each strategy and reports timing. |
-
 
 ### Examples
 
@@ -117,7 +116,7 @@ python generate.py \
 # Use a negative prompt
 python generate.py \
   --prompt "Product photograph of a wristwatch on black velvet" \
-  --negative-prompt "blurry, distorted, text, watermark" \
+  --negative-prompt "blurry, distorted, text, watermark"
 ```
 
 ### Persistent Worker Mode (Batch Generation)
@@ -149,55 +148,14 @@ JSONL format (one JSON object per line):
 | `steps` | no | Denoising steps (default: 4) |
 | `negative_prompt` | no | Negative prompt (default: " ") |
 
-## Performance Optimizations
-
-### Persistent Worker (Prompt Queue Mode)
-
-The `--worker` flag keeps DiT, VAE, and tokenizer resident across all prompts in a JSONL file. Qwen is loaded once, all prompts are text-encoded, then Qwen is unloaded. This amortizes the ~8 GB Qwen load across the entire batch.
-
-### Prompt Embedding Cache
-
-Text embeddings are cached on disk (~118 KB each) keyed by:
-- Formatted prompt text
-- Negative prompt text
-- Text-encoder checkpoint signature (size + mtime)
-- Tokenizer/template version
-
-For a cache hit, Qwen loading and text encoding are skipped entirely. This is especially useful when testing seeds, resolutions, quantization levels, or scheduler changes with the same prompt.
-
-### Phase-Level Profiler
-
-The `--profile` flag instruments every phase of generation:
-- Python/import startup
-- DiT load, VAE load, text encoder load
-- Text encoding, Qwen unload
-- Each DiT step, VAE decode, PNG save
-- Total wall-clock time
-
-### RoPE cos/sin Cache
-
-`MageFlowEmbedRope` caches cosine/sine tensors by resolution. Previously, every attention block recomputed `cos` and `sin` from raw angle tensors. For fixed resolution, the cached tensors are reused across all 12 blocks.
-
-### Cleanup Strategy
-
-The `cleanup_strategy` parameter in `pipeline.generate()` controls Qwen cleanup after text encoding:
-- `"unload_only"` — just unload Qwen (fastest, used by worker)
-- `"unload+gc"` — unload + `gc.collect()`
-- `"unload+cache"` — unload + `mx.clear_cache()`
-- `"all_three"` — all three (default)
-
-The `--benchmark-cleanup` flag benchmarks all four strategies.
-
-### `_generate_from_embeds()` Bypass
-
-For cached prompts, the worker calls `pipeline._generate_from_embeds()` which directly runs DiT steps + VAE decode using pre-encoded embeddings, skipping text encoding and `mx.clear_cache()` entirely. This eliminates the allocation churn that made the first DiT step of each subsequent prompt 2-4× slower.
-
 ## Architecture
+
+### Component Mapping
 
 | Component | PyTorch (Mage-Flow) | MLX Port |
 |---|---|---|
 | **DiT** | 4B MMDiT, 128 latent ch, 3072 hidden, 24 heads, 12 blocks | MLX `nn.Module`, BF16 |
-| **Text Encoder** | Qwen3-VL (2560 hidden, 36 layers) | mlx-lm Qwen3-VL, BF16 with staged unloading |
+| **Text Encoder** | Qwen3-VL (2560 hidden, 36 layers) | Native MLX Qwen3-VL, BF16 with staged unloading |
 | **VAE** | MageVAE (DConvEncoder + DConvDenoiser + CoD) | MLX `nn.Conv2d` (NHWC) |
 | **Scheduler** | FlowMatchEulerDiscrete (shift=6.0, 4 steps) | MLX port (mflux pattern) |
 
@@ -207,6 +165,297 @@ For cached prompts, the worker calls `pipeline._generate_from_embeds()` which di
 - **2D RoPE**: Complex-number rotary embeddings with 3 axes (frame=16, height=56, width=56)
 - **Joint attention**: Text+image tokens packed, single SDPA forward
 - **Precision**: Canonical weights remain BF16. Quantized variants are stored under distinct filenames and never overwrite the BF16 cache.
+
+### DiT (4B MMDiT)
+
+The Diffusion Transformer (`mage_mlx/dit.py`) is a 12-block double-stream MMDiT:
+
+- **Input projection**: 128-dim latent → 3072-dim hidden via `img_in` (Linear)
+- **Text projection**: 2560-dim → 3072-dim via `txt_norm` (RMSNorm) + `txt_in` (Linear)
+- **Timestep embedding**: 256-dim sinusoidal → 3072-dim via SiLU + Linear (qwen_proj style)
+- **Each double-stream block**:
+  - Adaptive modulation: `img_mod` / `txt_mod` produce 6×3072 gate/scale/shift vectors
+  - Joint attention: text and image tokens packed into `[text, image]` order, single SDPA forward
+    - Per-head RMSNorm on Q/K (LayerNorm would destroy the model)
+    - 2D RoPE applied to image tokens only
+  - Feed-forward: Linear → GELU(tanh) → Linear
+- **Output**: `AdaLayerNormContinuous` + `proj_out` → 128-dim velocity prediction
+
+### VAE (MageVAE)
+
+The VAE (`mage_mlx/vae.py`) is a lightweight high-fidelity latent tokenizer with three sub-components:
+
+1. **DConvEncoder** (21 DiCoBlocks): image → (mean, logvar) latent at 1/16 resolution
+2. **DConvDenoiser** (24 blocks): latent + zero noise → reconstructed image
+3. **CoD Decoder**: latent → conditioning features for the denoiser
+
+All Conv2d weights are transposed to NHWC layout. GroupNorm statistics are computed in FP32 even when activations are BF16.
+
+### Text Encoder (Native MLX Qwen3-VL)
+
+The text encoder (`mage_mlx/text_encoder.py`) is a native MLX implementation of Qwen3-VL, replacing the previous mlx-lm dependency:
+
+- 36-layer transformer, 2560 hidden, 32 query heads / 8 KV heads (GQA)
+- **mRoPE** (multi-dimensional RoPE) with 3D position IDs (temporal, height, width)
+- DeepStack: visual features injected into the language model at layers 0, 1, 2
+- Supports text-only encoding (txt2img) and multi-modal encoding (edit)
+
+The vision tower (`mage_mlx/vision_model.py`) is a 24-layer vision transformer with Conv3d patch embedding, 2D vision RoPE, and spatial patch merging. It is lazily constructed only when edit mode needs it.
+
+### Scheduler
+
+The scheduler (`mage_mlx/scheduler.py`) is a FlowMatchEulerDiscrete with static shift=6.0:
+
+- Linear sigmas: `linspace(1.0, 1/num_steps, num_steps)`
+- Static rational time-shift: `sigma = shift * t / (1 + (shift - 1) * t)`
+- Euler step: `x_{t+1} = x_t + (sigma_{t+1} - sigma_t) * v_t`
+- The Euler step is compiled with `mx.compile` for performance
+
+### 2D Multi-Scale RoPE
+
+The RoPE module (`mage_mlx/rope.py`) uses complex-number rotary embeddings with three axes: frame (16), height (56), width (56), totaling head_dim=128.
+
+**Optimization**: cos/sin tensors are cached by (frame, height, width, idx) so they are computed once per resolution and reused across all 12 blocks and all 4 denoising steps. This avoids 96 redundant cos/sin evaluations per generation.
+
+### Timestep Embedding
+
+The timestep embedding (`mage_mlx/timestep.py`) uses a 256-dim sinusoidal embedding with **BF16 rounding**. This is critical: the model was trained with this exact BF16 rounding, so using FP32 would produce slightly different embeddings and degrade output quality.
+
+### Latent Creator (Gaussian-Shading Watermark)
+
+The latent creator (`mage_mlx/latent_creator.py`) generates Mage's 128-channel initial latents with a steganographic watermark — a 256-bit message ("MageFlow") encoded into the noise pattern using a keyed PRNG. The watermark can be verified via `decode_gaussian_shading()` which returns a z-score and p-value.
+
+## Pipeline & Memory Management
+
+### Staged Loading
+
+The pipeline (`mage_mlx/pipeline.py`) uses a **staged loading policy** to keep peak RAM under 24 GB:
+
+```
+Phase 1: Load Qwen (~8 GB) → Encode prompts → Unload Qwen
+Phase 2: Load DiT + VAE (~7.9 GB) → Denoise + Decode
+```
+
+Peak RAM = max(Qwen, DiT+VAE) ≈ 8.0 GB instead of Qwen + DiT + VAE ≈ 15.4 GB.
+
+Three loading modes are available:
+- `from_pretrained()` — Full load (DiT + VAE + Text Encoder + Tokenizer)
+- `from_pretrained_text_encoder()` — Text encoder only (DiT/VAE deferred)
+- `load_dit_vae()` — Lazy DiT + VAE load after Qwen is unloaded
+
+### Generation Methods
+
+- `generate()` — Full pipeline: encode → unload Qwen → load DiT/VAE → denoise → decode
+- `_generate_from_embeds()` — Bypass text encoding entirely; used by the worker when embeddings are cached or pre-encoded in batch. Eliminates allocation churn that made the first DiT step of subsequent prompts 2-4× slower.
+
+### Cleanup Strategies
+
+After text encoding, Qwen can be cleaned up with one of four strategies:
+
+| Strategy | Description |
+|---|---|
+| `"unload_only"` | Just unload Qwen (fastest) |
+| `"unload+gc"` | Unload + `gc.collect()` |
+| `"unload+cache"` | Unload + `mx.clear_cache()` |
+| `"all_three"` | All three (default) |
+
+The `--benchmark-cleanup` flag benchmarks all four strategies.
+
+## Quantization
+
+Runtime quantization with quality-safe layer selection:
+
+- **Policy** (`should_quantize_dit_layer`): selects DiT Linear layers for quantization
+  - Must be in `transformer_blocks.*`
+  - Must have `in_features >= 32` and `in_features % 32 == 0`
+  - **Excludes**: conditioning projections (`.img_mod`, `.txt_mod`) and the final image MLP expansion (`transformer_blocks.11.img_mlp.fc1`) — quantizing this alone causes ~50% relative error
+- **Persistent cache**: 4-bit and 8-bit variants stored as packed safetensors + metadata JSON
+- **Cache validation**: checks metadata (policy version, bits, group size, base checkpoint signature) + representative tensor layouts
+- **Atomic writes**: temp file + `os.replace()` for crash safety
+- **Canonical BF16 checkpoint is never modified**
+
+Usage:
+
+```bash
+python generate.py --prompt "..." --quantize 4   # 4-bit
+python generate.py --prompt "..." --quantize 8   # 8-bit
+```
+
+The first run with `--quantize N` will quantize the DiT, save the packed cache, and print how many layers were quantized. Subsequent runs load the cache directly.
+
+## Caching Systems
+
+### Embedding Cache
+
+Text embeddings are cached on disk (~240 KB each vs. 8 GB Qwen weights).
+
+**Cache key** (SHA-256):
+- Formatted prompt text (with chat template applied)
+- Negative prompt text
+- Text-encoder checkpoint signature (size + mtime)
+- Tokenizer/template version
+- Reference image hashes (for edit mode — multimodal embeddings depend on both prompt and images)
+
+**Design note**: The generation seed is intentionally excluded from the cache key — text embeddings are seed-independent (the seed only affects DiT latent initialization, not text encoding), so including it would create duplicate cache entries for the same prompt with different seeds.
+
+For a cache hit, Qwen loading and text encoding are skipped entirely. This is especially useful when testing seeds, resolutions, quantization levels, or scheduler changes with the same prompt.
+
+Cache files are stored in `models/microsoft_Mage-Flow-Turbo/embedding_cache/`.
+
+### Vision Cache
+
+VAE-encoded reference image latents are cached on disk (~10 MB each vs. ~1 GB VAE weights).
+
+**Cache key** (SHA-256):
+- Raw image bytes hash (SHA-256)
+- Image pixel dimensions
+- VAE checkpoint signature (size + mtime)
+- Generation seed (Mage-Flow samples the VAE posterior with the generation seed)
+
+Cache files are stored in `models/microsoft_Mage-Flow-Edit-Turbo/vision_cache/`.
+
+## Image Editing
+
+### Single Edit
+
+```bash
+python generate.py \
+  --prompt "change the shoe to burgundy leather" \
+  --image test_10_shoe.png \
+  --output test_10_shoe_edited.png
+```
+
+Providing `--image` automatically selects the dedicated `microsoft/Mage-Flow-Edit-Turbo` checkpoint. On first use, the loader downloads and converts it to a cached MLX directory; subsequent runs reuse that cache.
+
+The edit pipeline:
+1. Encodes reference images via VAE → packed latents
+2. Encodes the edit prompt (text + reference images) via the multi-modal text encoder
+3. Concatenates target + reference latents along the sequence dimension
+4. Runs the DiT with multi-image `img_shapes` (target + references)
+5. Slices the output with `target_length` to extract only the target prediction
+6. Applies classifier-free guidance and optional renormalization
+7. Runs the 4-step flow matching loop
+8. Decodes the final latent via VAE
+
+**Note on CFG for edit**: The negative branch must be multimodal (same reference images) — a text-only negative removes vision tokens and produces an invalid unconditional edit condition.
+
+### Edit Worker Mode
+
+```bash
+python generate.py --worker prompts_edit.jsonl --edit
+```
+
+The edit worker mirrors the txt2img worker but with image validation, reference image hashing, and vision cache integration. Each JSONL line requires a `prompt` field and either an `image` field (target image to edit) or a `ref_images` field (list of reference image paths).
+
+### Renormalization
+
+The `--renormalization` flag scales velocity predictions to match the magnitude of the input latents, which can stabilize the flow matching process:
+
+```bash
+python generate.py --prompt "..." --image target.png --renormalization
+```
+
+## Profiling & Metadata
+
+### Phase-Level Profiler
+
+The `--profile` flag instruments every phase of generation:
+
+- Python/import startup
+- DiT load, VAE load, text encoder load
+- Text encoding, Qwen unload
+- Each DiT step, VAE decode, PNG save
+- Total wall-clock time
+
+The profiler tracks peak RSS (max of process RSS and MLX device memory) and supports incremental saves — metadata files are written after every phase so a crash mid-run still leaves a partial report on disk.
+
+### Metadata Output
+
+With `--metadata`, the profiler saves two files alongside the output image:
+
+- `{base}.json` — structured data (metadata, phases, overview, summary, log)
+- `{base}.md` — markdown matching the terminal output structure
+
+The JSON structure:
+
+```json
+{
+  "metadata": {
+    "model": "microsoft/Mage-Flow-Turbo",
+    "base_model": "MageFlowTransformer",
+    "generation_time_seconds": 12.3,
+    "created_at": "2026-07-29T20:55:00",
+    "image_path": "output/image.png",
+    "peak_memory_gib": 7.92
+  },
+  "phases": [
+    {"name": "python_startup", "elapsed": 0.5, "peak_rss_gib": 0.3, ...},
+    {"name": "pipeline_load", "elapsed": 1.2, "peak_rss_gib": 8.0, ...},
+    ...
+  ],
+  "summary": {
+    "total_time": 12.3,
+    "peak_ram": 7.92,
+    "prompts_count": 1
+  }
+}
+```
+
+### Terminal Output
+
+The profiler renders a real-time terminal report with:
+- Cyan bold separators and headers
+- Phase table (Phase / Time / Peak RAM / Saved File / Metadata)
+- Per-prompt summary table with relative time coloring (green = fast, red = slow)
+- Run Metadata block at the end
+
+In non-verbose mode (without `--metadata`), a progress bar is shown instead.
+
+## Output Path Resolution
+
+All generation modes (single, edit, worker, edit worker) use a unified output path resolver (`mage_mlx/output_resolver.py`):
+
+1. **Bare filename** (e.g. `"image.png"`) — save into the `output/` subfolder
+2. **Absolute path with filename** (e.g. `"/tmp/img.png"`) — save there
+3. **Absolute path without filename** (e.g. `"/tmp/"`) — construct a default filename from metadata (resolution, steps, seed, quantization) plus a short unique identifier
+4. **No output** (`None`) — same as case 3 but in the `output/` subfolder
+
+In every case, if a file with the resolved name already exists it is silently overwritten. The target directory is created if it does not exist.
+
+Metadata files are saved alongside the output image: `{base}.json` and `{base}.md`.
+
+## Project Structure
+
+```
+mage-flow-mlx/
+├── pyproject.toml          # Project configuration (uv)
+├── generate.py             # CLI for text-to-image generation and editing
+├── convert_weights.py      # PyTorch BF16 → MLX BF16 conversion (manual, optional)
+├── conftest.py             # Project configuration
+├── mage_mlx/
+│   ├── __init__.py         # Package exports
+│   ├── loader.py           # Auto-download & conversion with caching
+│   ├── pipeline.py         # MageFlowPipeline (end-to-end orchestration)
+│   ├── dit.py              # MageFlow DiT (12 double-stream MMDiT blocks)
+│   ├── vae.py              # MageVAE (DConvEncoder + DConvDenoiser + CoD)
+│   ├── text_encoder.py     # Native MLX Qwen3-VL text encoder
+│   ├── vision_model.py     # Qwen3-VL vision tower (for edit)
+│   ├── scheduler.py        # FlowMatchEulerDiscreteScheduler
+│   ├── rope.py             # 2D multi-scale RoPE (MageFlowEmbedRope)
+│   ├── timestep.py         # Sinusoidal timestep embedding (qwen_proj style)
+│   ├── edit.py             # MageFlowEdit (image editing pipeline)
+│   ├── latent_creator.py   # Gaussian-Shading watermarked noise
+│   ├── prompt_processor.py # Shared prompt templates & hidden-state processing
+│   ├── processor.py        # Qwen3-VL multi-modal tokenizer/image processor
+│   ├── embedding_cache.py  # Prompt embedding cache
+│   ├── vision_cache.py     # VAE reference latent cache
+│   ├── output_resolver.py  # Unified output path resolution
+│   ├── profiler.py         # Phase-level timing and memory profiler
+│   ├── worker.py           # Persistent JSONL worker (txt2img + edit)
+│   └── mflux_src/          # Ported mflux library (edit pipeline internals)
+├── memlog/                 # Development log
+└── output/                 # Generated images and metadata
+```
 
 ## Memory Budget (24 GB MacBook Air M5)
 
@@ -219,43 +468,20 @@ For cached prompts, the worker calls `pipeline._generate_from_embeds()` which di
 
 The text encoder and DiT briefly coexist while prompts are encoded. Afterward, the pipeline releases Qwen and clears the MLX cache before creating denoising activations. This staged policy allows BF16 inference on a 24 GB unified-memory Mac.
 
-## Project Structure
-
-```
-mage-flow-mlx/
-├── pyproject.toml          # Project configuration
-├── convert_weights.py      # PyTorch BF16 → MLX BF16 conversion (manual, optional)
-├── generate.py             # CLI for text-to-image generation
-├── mage_mlx/
-│   ├── __init__.py         # Package exports
-│   ├── loader.py           # Auto-download & conversion with caching
-│   ├── rope.py             # 2D multi-scale RoPE (MageFlowEmbedRope)
-│   ├── timestep.py         # Timestep embedding (qwen_proj style)
-│   ├── dit.py              # MageFlow DiT (12 double-stream MMDiT blocks)
-│   ├── text_encoder.py     # Qwen3-VL text encoder (mlx-lm)
-│   ├── vae.py              # MageVAE (DConvEncoder + DConvDenoiser + CoD)
-│   ├── scheduler.py        # FlowMatchEulerDiscreteScheduler
-│   ├── pipeline.py         # MageFlowPipeline (end-to-end)
-│   ├── profiler.py         # Phase-level timing and memory profiler
-│   ├── embedding_cache.py  # Prompt embedding cache (skip Qwen load on cache hit)
-│   ├── output_resolver.py  # Unified output path resolution across all modes
-│   └── worker.py           # Persistent JSONL worker (models stay resident)
-└── README.md
-```
-
 ## License
 
 This project is a port of Microsoft's Mage-Flow. See the original [Mage repository](https://github.com/microsoft/Mage) for the original implementation and license.
 
-### Editing
+## Development Log
 
-Providing `--image` automatically selects the dedicated `microsoft/Mage-Flow-Edit-Turbo`
-checkpoint. On first use, the loader downloads and converts it to a cached MLX directory;
-subsequent runs reuse that cache. `--model` is only needed to select a different dedicated
-Edit checkpoint explicitly.
+The `memlog/` directory contains a detailed development log documenting the iterative optimization process, including:
 
-```bash
-python generate.py --prompt "change the shoe to burgundy leather" \
-  --image test_10_shoe.png --output test_10_shoe_edited.png \
-  --allow-high-memory-edit
-```
+- Generation debugging and optimization sets
+- Phase profiler development
+- Edit pipeline implementation and audit
+- Worker profiler deduplication
+- Metadata output rewrites
+- Seed tracking and cache key management
+- Terminal output unification
+- Vision cache instrumentation
+- Edit worker implementation and bugfixes
