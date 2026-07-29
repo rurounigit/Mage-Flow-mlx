@@ -965,6 +965,7 @@ class LiveReport:
                         continue
                     if (
                         ph.name.startswith("text_encode")
+                        or ph.name.startswith("vae_encode_ref_")
                         or ph.name == "text_encoder_unload"
                         or ph.name == "dit_load"
                         or ph.name == "vae_load"

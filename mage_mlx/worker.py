@@ -758,7 +758,8 @@ def run_edit_worker(
     _EXPLICIT_EXACT = {"dit_load", "vae_load"}
     _EXPLICIT_PREFIXES = (
         "pipeline_load", "text_encoder_unload", "text_encode_",
-        "generation_", "save_", "total_wall_clock", "python_startup",
+        "vae_encode_ref_", "generation_", "save_", "total_wall_clock",
+        "python_startup",
     )
     if report and profiler:
         def _on_phase_complete(name, elapsed, rss):
@@ -1053,7 +1054,7 @@ def run_edit_worker(
                 pos_embeds = mx.concatenate([pos_embeds, neg_embeds], axis=0)
                 pos_mask = mx.concatenate([pos_mask, neg_mask], axis=0)
 
-        # Check vision cache for reference latents
+        # Check vision cache for reference latents (VAE-encoded)
         vae_path = os.path.join(params["model"], "vae.safetensors")
         with_bytes = []
         for ref_path in ref_image_paths:
@@ -1065,8 +1066,15 @@ def run_edit_worker(
             vae_path=vae_path,
             seed=seed,
         )
+        if profiler:
+            profiler.start(f"vae_encode_ref_{i + 1}")
         reference_latents = vision_cache.get(vision_key)
-        if reference_latents is None:
+        if reference_latents is not None:
+            cache_status = "HIT"
+            if report and report.verbose:
+                print(f"  Vision cache HIT — skipping VAE encode for ref image(s)")
+        else:
+            cache_status = "MISS"
             reference_latents = MageFlowEditUtil.encode_references(
                 edit.vae,
                 ref_images,
@@ -1075,6 +1083,18 @@ def run_edit_worker(
                 seed=seed,
             )
             vision_cache.put(vision_key, reference_latents)
+            if report and report.verbose:
+                print(f"  Vision cache MISS — encoding ref image(s) with VAE")
+        if profiler:
+            profiler.stop(f"vae_encode_ref_{i + 1}")
+            profiler.set_metadata(f"vae_encode_ref_{i + 1}", "cache", cache_status)
+            if report:
+                report.stop_phase(
+                    f"vae_encode_ref_{i + 1}",
+                    profiler.get_elapsed(f"vae_encode_ref_{i + 1}") or 0.0,
+                    profiler.get_phase_rss(f"vae_encode_ref_{i + 1}"),
+                )
+                report.add_metadata(f"vae_encode_ref_{i + 1}", "cache", cache_status)
 
         # Create noise latents
         target_latents = MageFlowLatentCreator.create_noise(
@@ -1265,6 +1285,7 @@ def run_edit_worker(
                 continue
             if (
                 rec.name.startswith("text_encode")
+                or rec.name.startswith("vae_encode_ref_")
                 or rec.name == "text_encoder_unload"
                 or rec.name == "dit_load"
                 or rec.name == "vae_load"
