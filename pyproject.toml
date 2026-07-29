@@ -28,3 +28,6 @@ mage-flow-generate = "generate:main"
 dev-dependencies = [
     "torch>=2.3",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

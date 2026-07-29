@@ -439,7 +439,7 @@ class TestCLIRouting:
             del sys.modules["generate"]
         # We need to import generate.py as a module
         import importlib.util
-        spec = importlib.util.spec_from_file_location("generate", "generate.py")
+        spec = importlib.util.spec_from_file_location("generate", os.path.join(os.path.dirname(__file__), "..", "generate.py"))
         gen = importlib.util.module_from_spec(spec)
         # Don't execute it — just get the parser function
         # Instead, parse args directly using the same logic
