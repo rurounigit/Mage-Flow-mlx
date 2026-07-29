@@ -32,7 +32,7 @@ import mlx.core as mx
 
 
 # Cache format version — bump when the embedding format or template changes
-EMBEDDING_CACHE_VERSION = 3
+EMBEDDING_CACHE_VERSION = 4
 
 # Tokenizer/template version — bump when MAGE_FLOW_TEMPLATE or START_IDX changes
 TOKENIZER_VERSION = 1
@@ -106,7 +106,10 @@ class EmbeddingCache:
             "te_signature": te_signature,
         }
         if ref_image_hashes:
-            key_data["ref_image_hashes"] = sorted(ref_image_hashes)
+            # Reference order affects both multimodal conditioning and DiT
+            # image-shape ordering, so it is part of cache identity.
+            key_data["mode"] = "edit"
+            key_data["ref_image_hashes"] = list(ref_image_hashes)
         key_str = json.dumps(key_data, sort_keys=True)
         return hashlib.sha256(key_str.encode("utf-8")).hexdigest()
 
@@ -182,15 +185,49 @@ class EmbeddingCache:
                     os.remove(path)
             raise
 
+    def get_conditioning(self, key: str) -> Optional[tuple[mx.array, mx.array]]:
+        """Load a complete edit-conditioning payload (embeddings and mask)."""
+        path = os.path.join(self.cache_dir, f"{key}.npz")
+        meta_path = self._meta_path(key)
+        if not os.path.exists(path) or not os.path.exists(meta_path):
+            return None
+        try:
+            with open(meta_path) as f:
+                meta = json.load(f)
+            if meta.get("version") != EMBEDDING_CACHE_VERSION or meta.get("kind") != "conditioning":
+                return None
+            payload = mx.load(path)
+            return payload["embeddings"], payload["attention_mask"]
+        except (OSError, ValueError, KeyError, json.JSONDecodeError):
+            return None
+
+    def put_conditioning(self, key: str, embeddings: mx.array, attention_mask: mx.array) -> None:
+        """Persist edit embeddings together with their exact attention mask."""
+        path = os.path.join(self.cache_dir, f"{key}.npz")
+        temp_path = os.path.join(self.cache_dir, f"{key}.tmp.npz")
+        meta_path = self._meta_path(key)
+        meta_temp = os.path.join(self.cache_dir, f"{key}.tmp.json")
+        try:
+            mx.savez(temp_path, embeddings=embeddings, attention_mask=attention_mask)
+            os.replace(temp_path, path)
+            with open(meta_temp, "w") as f:
+                json.dump({"version": EMBEDDING_CACHE_VERSION, "kind": "conditioning"}, f, indent=2)
+            os.replace(meta_temp, meta_path)
+        except OSError:
+            for candidate in (temp_path, meta_temp):
+                if os.path.exists(candidate):
+                    os.remove(candidate)
+            raise
+
     def clear(self) -> int:
         """Remove all cached embeddings. Returns the number of entries removed."""
         count = 0
         for filename in os.listdir(self.cache_dir):
-            if filename.endswith(".npy"):
-                key = filename[:-len(".npy")]
-                npy_path = self._cache_path(key)
+            if filename.endswith((".npy", ".npz")):
+                key, _ = os.path.splitext(filename)
+                data_path = os.path.join(self.cache_dir, filename)
                 meta_path = self._meta_path(key)
-                for path in (npy_path, meta_path):
+                for path in (data_path, meta_path):
                     if os.path.exists(path):
                         os.remove(path)
                 count += 1

@@ -776,11 +776,19 @@ def run_edit_worker(
 
     # --- Phase 0: Load text encoder + tokenizer (DiT + VAE deferred) ---
     first_params = merge_params(defaults, prompts[0])
+    from mage_mlx.loader import ensure_mlx_model
+    converted_model, _ = ensure_mlx_model(
+        first_params["model"],
+        quantize=first_params.get("quantize"),
+        profiler=profiler,
+    )
+    first_params["model"] = converted_model
+    defaults["model"] = converted_model
     if profiler:
         profiler.start("pipeline_load")
     # Load text encoder from shared path (text encoder is shared across all models)
     from mage_mlx.pipeline import resolve_text_encoder_path
-    te_weights_path = resolve_text_encoder_path(first_params["model"])
+    te_weights_path = resolve_text_encoder_path("models/microsoft_Mage-Flow-Turbo")
     from mage_mlx.text_encoder import MageFlowTextEncoder
     te = MageFlowTextEncoder(
         model_path=te_weights_path if os.path.exists(te_weights_path) else None,
@@ -797,15 +805,13 @@ def run_edit_worker(
     from mage_mlx.pipeline import MageFlowTokenizer
     raw_tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-VL-8B-Instruct")
     edit.tokenizers = {"mage": MageFlowTokenizer(raw_tokenizer)}
-    te_path = os.path.join(first_params["model"], "text_encoder.safetensors")
-    if not os.path.exists(te_path):
-        te_path = None
+    te_path = te_weights_path if os.path.exists(te_weights_path) else None
     current_params = dict(first_params)
 
     # Initialize caches AFTER model is loaded to avoid creating stray
     # directories that intercept PathResolution for HF IDs
-    cache = EmbeddingCache("models/microsoft_Mage-Flow-Edit-Turbo")
-    vision_cache = VisionCache("models/microsoft_Mage-Flow-Edit-Turbo")
+    cache = EmbeddingCache(".cache/mage-flow-mlx/edit")
+    vision_cache = VisionCache(".cache/mage-flow-mlx/edit")
     if profiler:
         profiler.stop("pipeline_load")
     if report:
@@ -844,9 +850,10 @@ def run_edit_worker(
             te_path=te_path,
             ref_image_hashes=ref_image_hashes,
         )
-        cached_embeds = cache.get(cache_key)
+        cached_conditioning = cache.get_conditioning(cache_key)
 
-        if cached_embeds is not None:
+        if cached_conditioning is not None:
+            cached_embeds, pos_mask = cached_conditioning
             # Cache HIT — still need to encode negative if guidance > 1.0
             neg_embeds = None
             neg_mask = None
@@ -871,8 +878,6 @@ def run_edit_worker(
                             profiler.get_phase_rss(f"text_encode_neg_{i + 1}"),
                         )
                         report.add_metadata(f"text_encode_neg_{i + 1}", "cache", "HIT")
-            # Reconstruct pos_mask from cached embeds (all ones for single prompt)
-            pos_mask = mx.ones((1, cached_embeds.shape[1]), dtype=mx.int32)
             prompt_embeds[i] = (cached_embeds, pos_mask, neg_embeds, neg_mask)
             if report and report.verbose:
                 print(f"  Prompt {i + 1}/{len(prompts)}: Cache HIT — skipping Qwen encode")
@@ -891,7 +896,7 @@ def run_edit_worker(
             mx.eval(pos_embeds, pos_mask)
 
             # Save to cache for future runs
-            cache.put(cache_key, pos_embeds)
+            cache.put_conditioning(cache_key, pos_embeds, pos_mask)
 
             # Encode negative prompt if guidance > 1.0
             neg_embeds = None
@@ -939,11 +944,7 @@ def run_edit_worker(
         print("  Qwen unloaded (batch encoding complete)")
 
     # --- Phase 1.5: Load DiT + VAE (after Qwen is unloaded) ---
-    if profiler:
-        profiler.start("dit_load")
     edit.load_dit_vae(profiler=profiler)
-    if profiler:
-        profiler.stop("vae_load")
     if report:
         report.stop_phase("dit_load", profiler.get_elapsed("dit_load") or 0.0, profiler.get_phase_rss("dit_load"))
         report.stop_phase("vae_load", profiler.get_elapsed("vae_load") or 0.0, profiler.get_phase_rss("vae_load"))
@@ -1055,11 +1056,15 @@ def run_edit_worker(
 
         # Check vision cache for reference latents
         vae_path = os.path.join(params["model"], "vae.safetensors")
-        ref_image_hashes = [_hash_image_bytes(p) for p in ref_image_paths]
+        with_bytes = []
+        for ref_path in ref_image_paths:
+            with open(ref_path, "rb") as ref_file:
+                with_bytes.append(ref_file.read())
         vision_key = vision_cache.make_key(
-            image_bytes=open(ref_image_paths[0], "rb").read(),
-            size=ref_images[0].size,
+            image_bytes=with_bytes,
+            size=(config.width, config.height),
             vae_path=vae_path,
+            seed=seed,
         )
         reference_latents = vision_cache.get(vision_key)
         if reference_latents is None:
@@ -1096,21 +1101,35 @@ def run_edit_worker(
             renormalization=params.get("renormalization", False),
         )
 
-        # Denoising loop
+        # Denoising loop (mirrors MageFlowEdit.generate_image for parity)
+        from mage_mlx.mflux_src.mflux.utils.exceptions import StopImageGenerationException
+        ctx = edit.callbacks.start(seed=seed, prompt=params["prompt"], config=config)
+        ctx.before_loop(target_latents)
         for step in config.time_steps:
-            if profiler:
-                profiler.start(f"edit_step_{step + 1}")
-            model_input = mx.concatenate([target_latents, reference_latents], axis=1)
-            velocity = predict(model_input, config.scheduler.sigmas[step])
-            target_latents = config.scheduler.step(
-                noise=velocity,
-                timestep=step,
-                latents=target_latents,
-                sigmas=config.scheduler.sigmas,
-            )
-            mx.eval(target_latents)
-            if profiler:
-                profiler.stop(f"edit_step_{step + 1}")
+            try:
+                if profiler:
+                    profiler.start(f"edit_step_{step + 1}")
+                model_input = mx.concatenate([target_latents, reference_latents], axis=1)
+                velocity = predict(model_input, config.scheduler.sigmas[step])
+                target_latents = config.scheduler.step(
+                    noise=velocity,
+                    timestep=step,
+                    latents=target_latents,
+                    sigmas=config.scheduler.sigmas,
+                )
+                ctx.in_loop(step, target_latents)
+                mx.eval(target_latents)
+                if profiler:
+                    profiler.stop(f"edit_step_{step + 1}")
+            except KeyboardInterrupt:
+                ctx.interruption(step, target_latents)
+                raise StopImageGenerationException(
+                    f"Stopping image generation at step {step + 1}/{config.num_inference_steps}"
+                )
+        # Release the predictor closure and final evaluated graph before
+        # low-RAM callbacks evict the model (matches generate_image).
+        del predict, velocity, model_input
+        ctx.after_loop(target_latents)
 
         # Decode
         if profiler:

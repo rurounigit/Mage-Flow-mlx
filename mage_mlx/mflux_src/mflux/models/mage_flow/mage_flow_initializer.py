@@ -32,7 +32,14 @@ class MageFlowInitializer:
         path = model_path or model_config.model_name
         root_path = MageFlowInitializer._resolve_model_path(path)
         MageFlowInitializer._init_config(model, model_config)
-        skip_components = {"text_encoder"} if text_encoder is not None else None
+        skip_components = set()
+        if text_encoder is not None:
+            skip_components.add("text_encoder")
+        if not load_dit_vae:
+            skip_components.add("vae")
+            skip_components.add("transformer")
+        if not skip_components:
+            skip_components = None
         weights = MageFlowInitializer._load_weights(root_path, skip_components=skip_components)
         if text_encoder is None:
             MageFlowWeightDefinition.validate_loaded_weights(weights)
@@ -45,8 +52,12 @@ class MageFlowInitializer:
                 tokenizer_path = Path(te_path)
         MageFlowInitializer._init_tokenizers(model, root_path, tokenizer_path=tokenizer_path)
         MageFlowInitializer._init_models(model, model_config, load_dit_vae, text_encoder=text_encoder)
-        if text_encoder is None:
-            MageFlowInitializer._validate_hf_model_coverage(model, weights, load_dit_vae)
+        MageFlowInitializer._validate_hf_model_coverage(
+            model,
+            weights,
+            load_dit_vae,
+            validate_text_encoder=text_encoder is None,
+        )
         MageFlowInitializer._apply_weights(model, weights, quantize, load_dit_vae, text_encoder=text_encoder)
 
         del weights
@@ -145,21 +156,38 @@ class MageFlowInitializer:
                 )
 
     @staticmethod
-    def _validate_hf_model_coverage(model, weights: LoadedWeights, load_dit_vae: bool = True) -> None:
+    def _validate_hf_model_coverage(
+        model,
+        weights: LoadedWeights,
+        load_dit_vae: bool = True,
+        validate_text_encoder: bool = True,
+    ) -> None:
         """Fail before allocation if a released checkpoint no longer matches the port."""
 
         if weights.meta_data.mflux_version is not None:
             return
 
-        component_names = ("vae", "transformer", "text_encoder") if load_dit_vae else ("text_encoder",)
+        component_names = []
+        if load_dit_vae:
+            component_names.extend(("vae", "transformer"))
+        if validate_text_encoder:
+            component_names.append("text_encoder")
         for component_name in component_names:
             source = dict(tree_flatten(weights.components[component_name]))
             target_model = getattr(model, component_name)
             target = dict(tree_flatten(target_model.parameters()))
             missing = sorted(target.keys() - source.keys())
             unexpected = sorted(source.keys() - target.keys())
-            shape_mismatches = sorted(
-                key for key in source.keys() & target.keys() if source[key].shape != target[key].shape
+            # VAE convolution kernels are deliberately reshaped/folded by
+            # prepare_vae_for_loading/finalize_vae_after_loading. For VAE,
+            # strict key coverage is the valid invariant; DiT and Qwen must
+            # additionally match shapes exactly.
+            shape_mismatches = (
+                []
+                if component_name == "vae"
+                else sorted(
+                    key for key in source.keys() & target.keys() if source[key].shape != target[key].shape
+                )
             )
             if missing or unexpected or shape_mismatches:
                 raise ValueError(

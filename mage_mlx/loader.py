@@ -255,7 +255,12 @@ def ensure_mlx_model(
         output_dir = os.path.join("models", safe_name)
     else:
         output_dir = model_path_or_repo
-        repo_id = "microsoft/Mage-Flow-Turbo"
+        basename = os.path.basename(os.path.normpath(output_dir))
+        if output_dir.startswith("models/") and "_" in basename:
+            organization, model_name = basename.split("_", 1)
+            repo_id = f"{organization}/{model_name}"
+        else:
+            repo_id = "microsoft/Mage-Flow-Turbo"
 
     # Migrate the original local default without copying multi-GB files.  Keep
     # a symlink at the legacy path so existing scripts remain compatible.

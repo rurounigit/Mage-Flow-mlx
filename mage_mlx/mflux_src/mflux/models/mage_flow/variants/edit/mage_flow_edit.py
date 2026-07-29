@@ -83,6 +83,14 @@ class MageFlowEdit(nn.Module):
         self.transformer = MageFlowTransformer(**self._model_config.transformer_overrides)
         vae_weights = weights.components["vae"]
         MageFlowWeightDefinition.prepare_vae_for_loading(self.vae, vae_weights)
+        # Never permit strict=False to leave random FP32 parameters behind.
+        # This catches incompatible flat checkpoints before generation.
+        MageFlowInitializer._validate_hf_model_coverage(
+            self,
+            weights,
+            load_dit_vae=True,
+            validate_text_encoder=False,
+        )
         self.bits = WeightApplier.apply_and_quantize(
             weights=weights,
             quantize_arg=quantize if quantize is not None else self._quantize,

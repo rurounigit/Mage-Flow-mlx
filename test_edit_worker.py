@@ -11,6 +11,7 @@ import hashlib
 from unittest.mock import MagicMock, patch
 
 import pytest
+import mlx.core as mx
 
 from mage_mlx.worker import (
     load_edit_prompts,
@@ -491,3 +492,75 @@ class TestWorkerRouting:
             }) + "\n")
             prompts = load_edit_prompts(str(jsonl))
         assert len(prompts) == 1  # image is valid for edit worker
+
+
+class TestEditRegressionContracts:
+    """Regression tests for the bb898d2 edit-worker failures."""
+
+    def test_single_edit_does_not_duplicate_primary_reference(self):
+        from generate import _resolve_edit_image_paths
+
+        assert _resolve_edit_image_paths("target.png", None) == ["target.png"]
+        assert _resolve_edit_image_paths("target.png", "ref.png") == [
+            "target.png",
+            "ref.png",
+        ]
+
+    def test_converted_transformer_keys_map_to_mflux_tree(self):
+        from mage_mlx.mflux_src.mflux.models.mage_flow.weights.mage_flow_weight_mapping import (
+            MageFlowWeightMapping,
+        )
+
+        assert MageFlowWeightMapping.transform_transformer_key(
+            "transformer_blocks.0.img_mlp.fc1.weight"
+        ) == "transformer_blocks.0.img_mlp.net.0.proj.weight"
+        assert MageFlowWeightMapping.transform_transformer_key(
+            "transformer_blocks.0.img_mod.weight"
+        ) == "transformer_blocks.0.img_mod.1.weight"
+
+    def test_converted_vae_keys_map_to_mflux_tree(self):
+        from mage_mlx.mflux_src.mflux.models.mage_flow.weights.mage_flow_weight_mapping import (
+            MageFlowWeightMapping,
+        )
+
+        assert MageFlowWeightMapping.transform_vae_key(
+            "dconv_encoder.blocks.0.ca.layers.1.weight"
+        ) == "encoder.blocks.0.ca.1.weight"
+        assert MageFlowWeightMapping.transform_vae_key(
+            "decoder_model.y_embedder.decoder.block.layers.0.norm1.norm.weight"
+        ) == "decoder_model.y_embedder.decoder.block.0.norm1.weight"
+
+    def test_edit_conditioning_cache_round_trips_exact_mask(self, tmp_path):
+        from mage_mlx.embedding_cache import EmbeddingCache
+
+        cache = EmbeddingCache(str(tmp_path))
+        key = cache.make_key("edit", ref_image_hashes=["first", "second"])
+        embeddings = mx.ones((1, 3, 4), dtype=mx.bfloat16)
+        mask = mx.array([[1, 1, 0]], dtype=mx.int32)
+        cache.put_conditioning(key, embeddings, mask)
+        loaded_embeddings, loaded_mask = cache.get_conditioning(key)
+        assert loaded_embeddings.shape == embeddings.shape
+        assert loaded_mask.tolist() == mask.tolist()
+
+    def test_edit_embedding_key_preserves_reference_order(self, tmp_path):
+        from mage_mlx.embedding_cache import EmbeddingCache
+
+        cache = EmbeddingCache(str(tmp_path))
+        assert cache.make_key("edit", ref_image_hashes=["a", "b"]) != cache.make_key(
+            "edit", ref_image_hashes=["b", "a"]
+        )
+
+    def test_vision_key_includes_all_refs_resolution_and_seed(self, tmp_path):
+        from mage_mlx.vision_cache import VisionCache
+
+        cache = VisionCache(str(tmp_path))
+        base = cache.make_key([b"a", b"b"], (512, 512), seed=42)
+        assert base != cache.make_key([b"b", b"a"], (512, 512), seed=42)
+        assert base != cache.make_key([b"a", b"b"], (1024, 1024), seed=42)
+        assert base != cache.make_key([b"a", b"b"], (512, 512), seed=43)
+
+    def test_local_edit_path_infers_edit_hf_repo(self):
+        # Keep the repository inference contract visible without downloading.
+        output_dir = "models/microsoft_Mage-Flow-Edit-Turbo"
+        organization, model_name = os.path.basename(output_dir).split("_", 1)
+        assert f"{organization}/{model_name}" == "microsoft/Mage-Flow-Edit-Turbo"

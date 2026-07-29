@@ -688,6 +688,16 @@ def main():
         print(f"  Metadata saved to {_C.GREEN}{base_path}.json{_C.RESET} and {_C.GREEN}{base_path}.md{_C.RESET}")
 
 
+def _resolve_edit_image_paths(image: str, ref_images: Optional[str]) -> list[str]:
+    """Return the primary image once, followed by explicit references."""
+    if ref_images is None:
+        return [image]
+    references = [path.strip() for path in ref_images.split(",") if path.strip()]
+    if not references:
+        raise ValueError("at least one reference image is required")
+    return [image] + references
+
+
 def _run_edit(args, prof, report=None):
 
     """Run the image editing pipeline using mflux's MageFlowEdit."""
@@ -695,22 +705,40 @@ def _run_edit(args, prof, report=None):
         MageFlowEdit,
     )
 
-    if args.ref_images is None:
-        # Use the target image as its own reference (mflux --image-paths semantics)
-        ref_paths = [args.image]
-    else:
-        ref_paths = [p.strip() for p in args.ref_images.split(",") if p.strip()]
-        if not ref_paths:
-            print("Error: at least one reference image is required")
-            sys.exit(1)
+    try:
+        image_paths = _resolve_edit_image_paths(args.image, args.ref_images)
+    except ValueError as error:
+        print(f"Error: {error}")
+        sys.exit(1)
 
     try:
         prof.start("pipeline_load")
+        from mage_mlx.loader import ensure_mlx_model
+        model_dir, _ = ensure_mlx_model(
+            args.model,
+            quantize=args.quantize,
+            profiler=prof,
+        )
+        # Load text encoder from shared path (edit model does not include TE weights)
+        from mage_mlx.pipeline import resolve_text_encoder_path
+        # The Edit repository does not carry Qwen weights. Resolve the shared
+        # encoder from the converted base-model cache.
+        te_weights_path = resolve_text_encoder_path("models/microsoft_Mage-Flow-Turbo")
+        from mage_mlx.text_encoder import MageFlowTextEncoder
+        te = MageFlowTextEncoder(
+            model_path=te_weights_path if os.path.exists(te_weights_path) else None,
+        )
         edit = MageFlowEdit(
             quantize=args.quantize,
-            model_path=args.model,
+            model_path=model_dir,
             load_dit_vae=False,
+            text_encoder=te,
         )
+        # Set tokenizer from Qwen/Qwen3-VL-8B-Instruct (cached from regular worker)
+        from transformers import AutoTokenizer
+        from mage_mlx.pipeline import MageFlowTokenizer
+        raw_tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-VL-8B-Instruct")
+        edit.tokenizers = {"mage": MageFlowTokenizer(raw_tokenizer)}
         prof.stop("pipeline_load")
     except Exception as e:
         print(f"  ERROR loading edit pipeline: {e}")
@@ -740,7 +768,7 @@ def _run_edit(args, prof, report=None):
     generated = edit.generate_image(
         seed=args.seed,
         prompt=args.prompt,
-        image_paths=[args.image] + ref_paths,
+        image_paths=image_paths,
         num_inference_steps=args.steps,
         height=args.height,
         width=args.width,

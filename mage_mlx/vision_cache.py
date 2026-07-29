@@ -31,7 +31,7 @@ import mlx.core as mx
 
 
 # Cache format version — bump when the latent format or VAE changes
-VISION_CACHE_VERSION = 1
+VISION_CACHE_VERSION = 2
 
 
 class VisionCache:
@@ -48,9 +48,10 @@ class VisionCache:
 
     def make_key(
         self,
-        image_bytes: bytes,
+        image_bytes: bytes | list[bytes],
         size: tuple[int, int],
         vae_path: Optional[str] = None,
+        seed: Optional[int] = None,
     ) -> str:
         """Build a cache key from image content and VAE signature.
 
@@ -67,7 +68,8 @@ class VisionCache:
         Returns:
             SHA-256 hex digest string
         """
-        image_hash = hashlib.sha256(image_bytes).hexdigest()
+        ordered_bytes = image_bytes if isinstance(image_bytes, list) else [image_bytes]
+        image_hashes = [hashlib.sha256(value).hexdigest() for value in ordered_bytes]
 
         vae_signature = "none"
         if vae_path and os.path.exists(vae_path):
@@ -76,10 +78,12 @@ class VisionCache:
 
         key_data = {
             "version": VISION_CACHE_VERSION,
-            "image_hash": image_hash,
+            "image_hashes": image_hashes,
             "width": size[0],
             "height": size[1],
             "vae_signature": vae_signature,
+            # Mage-Flow samples the VAE posterior with the generation seed.
+            "seed": seed,
         }
         key_str = json.dumps(key_data, sort_keys=True)
         return hashlib.sha256(key_str.encode("utf-8")).hexdigest()
