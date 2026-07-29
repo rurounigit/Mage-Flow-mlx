@@ -128,3 +128,64 @@ def resolve_output_path(
     if dir_part:
         os.makedirs(dir_part, exist_ok=True)
     return path
+
+
+def resolve_metadata_path(
+    output: Optional[str],
+    source_path: Optional[str] = None,
+) -> str:
+    """Resolve the base path for metadata files (JSON + MD).
+
+    Metadata files are saved alongside the output image, following the same
+    directory resolution rules as :func:`resolve_output_path`:
+
+    - **Bare filename or ``None``** → ``output/`` subfolder
+    - **Absolute path** → the directory portion of that path
+
+    The metadata filename is derived from *source_path* (typically the JSONL
+    file path for worker mode, or the resolved output path for single/edit
+    mode).  If *source_path* is ``None``, the output filename (without
+    extension) is used.
+
+    Args:
+        output: The raw ``--output`` value from the CLI (``None`` if omitted).
+        source_path: Path used to derive the metadata filename.  For worker
+            mode this is the JSONL file path; for single/edit mode this is
+            the resolved output image path.
+
+    Returns:
+        A base path **without extension** (e.g. ``"output/prompts"``).
+        The caller appends ``.json`` and ``.md``.  The directory is created
+        if it does not exist.
+
+    Examples:
+        >>> resolve_metadata_path(None, "prompts.jsonl")
+        'output/prompts'
+        >>> resolve_metadata_path("image.png", "image.png")
+        'output/image'
+        >>> resolve_metadata_path("/tmp/img.png", "/tmp/img.png")
+        '/tmp/img'
+    """
+    # Determine the directory from the output parameter
+    if output is None:
+        dir_path = DEFAULT_OUTPUT_DIR
+    else:
+        parent, name = os.path.split(output)
+        if parent == "":
+            # Bare filename → output/ subfolder
+            dir_path = DEFAULT_OUTPUT_DIR
+        else:
+            # Absolute or relative path with a directory component
+            dir_path = parent
+
+    # Determine the metadata filename from source_path
+    if source_path is not None:
+        metadata_name = os.path.splitext(os.path.basename(source_path))[0]
+    elif output is not None:
+        metadata_name = os.path.splitext(os.path.basename(output))[0]
+    else:
+        metadata_name = "metadata"
+
+    base_path = os.path.join(dir_path, metadata_name)
+    os.makedirs(dir_path, exist_ok=True)
+    return base_path

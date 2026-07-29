@@ -37,7 +37,7 @@ from typing import Any, Optional
 import mlx.core as mx
 
 from .profiler import Profiler
-from .output_resolver import resolve_output_path
+from .output_resolver import resolve_output_path, resolve_metadata_path
 from mage_mlx.mflux_src.mflux.models.mage_flow.variants.conditioning import MageFlowConditioning
 
 
@@ -169,6 +169,7 @@ def run_worker(
     profiler: Optional[Profiler] = None,
     metadata_enabled: bool = False,
     report=None,
+    output: Optional[str] = None,
 ) -> tuple[Optional[dict], Optional[list]]:
     """Run the persistent JSONL worker in prompt queue mode.
 
@@ -208,7 +209,7 @@ def run_worker(
     # Set up incremental save path on profiler (so files are written
     # after every phase completes, not just at the end)
     if metadata_enabled and profiler:
-        base_path = os.path.splitext(jsonl_path)[0]
+        base_path = resolve_metadata_path(output, jsonl_path)
         profiler.metadata_path = base_path
         profiler.metadata = {
             "model": _get_model_name(defaults["model"]),
@@ -515,7 +516,7 @@ def run_worker(
     }
 
     if metadata_enabled and profiler:
-        base_path = os.path.splitext(jsonl_path)[0]
+        base_path = resolve_metadata_path(output, jsonl_path)
         # Update metadata with final values
         profiler.metadata["generation_time_seconds"] = profiler.get_elapsed("total_wall_clock")
         profiler.metadata["peak_memory_gib"] = profiler.get_peak_rss_gib()
@@ -692,6 +693,7 @@ def run_edit_worker(
     profiler: Optional[Profiler] = None,
     metadata_enabled: bool = False,
     report=None,
+    output: Optional[str] = None,
 ) -> tuple[Optional[dict], Optional[list]]:
     """Run the persistent JSONL edit worker in prompt queue mode.
 
@@ -753,7 +755,7 @@ def run_edit_worker(
 
     # Set up incremental save path on profiler
     if metadata_enabled and profiler:
-        base_path = os.path.splitext(jsonl_path)[0]
+        base_path = resolve_metadata_path(output, jsonl_path)
         profiler.metadata_path = base_path
         profiler.metadata = {
             "model": _get_model_name(defaults["model"]),
@@ -1281,7 +1283,7 @@ def run_edit_worker(
     }
 
     if metadata_enabled and profiler:
-        base_path = os.path.splitext(jsonl_path)[0]
+        base_path = resolve_metadata_path(output, jsonl_path)
         profiler.metadata["generation_time_seconds"] = profiler.get_elapsed("total_wall_clock")
         profiler.metadata["peak_memory_gib"] = profiler.get_peak_rss_gib()
         profiler.overview = [

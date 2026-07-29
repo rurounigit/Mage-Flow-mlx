@@ -262,6 +262,9 @@ def main():
             prof.get_phase_rss("python_startup"),
         )
 
+    # Import output resolver for all modes (worker, edit, single generation)
+    from mage_mlx.output_resolver import resolve_output_path, resolve_metadata_path
+
     # --- Worker mode ---
     if args.worker and not args.edit:
         from mage_mlx.worker import run_worker
@@ -282,6 +285,7 @@ def main():
             profiler=prof,
             metadata_enabled=args.metadata,
             report=report,
+            output=args.output,
         )
         prof.stop("total_wall_clock")
         if report:
@@ -299,7 +303,7 @@ def main():
             )
             report.print_run_metadata(metadata or {})
             if args.metadata:
-                base_path = os.path.splitext(args.worker)[0]
+                base_path = resolve_metadata_path(args.output, args.worker)
                 print(f"\n  Metadata saved to {_C.GREEN}{base_path}.json{_C.RESET} and {_C.GREEN}{base_path}.md{_C.RESET}")
         return
 
@@ -324,6 +328,7 @@ def main():
             profiler=prof,
             metadata_enabled=args.metadata,
             report=report,
+            output=args.output,
         )
         prof.stop("total_wall_clock")
         if report:
@@ -340,7 +345,7 @@ def main():
             )
             report.print_run_metadata(metadata or {})
             if args.metadata:
-                base_path = os.path.splitext(args.worker)[0]
+                base_path = resolve_metadata_path(args.output, args.worker)
                 print(f"\n  Metadata saved to {_C.GREEN}{base_path}.json{_C.RESET} and {_C.GREEN}{base_path}.md{_C.RESET}")
         return
 
@@ -358,8 +363,6 @@ def main():
     # If --output is an absolute path with filename → use as-is
     # If --output is an absolute path without filename → generate default name
     # If --output is None → generate default name in output/ subfolder
-    from mage_mlx.output_resolver import resolve_output_path
-
     args.output = resolve_output_path(
         output=args.output,
         width=args.width,

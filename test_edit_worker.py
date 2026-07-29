@@ -24,7 +24,7 @@ from mage_mlx.worker import (
     VALID_PARAMS,
     _hash_image_bytes,
 )
-from mage_mlx.output_resolver import resolve_output_path
+from mage_mlx.output_resolver import resolve_output_path, resolve_metadata_path
 
 
 # ---------------------------------------------------------------------------
@@ -365,6 +365,58 @@ class TestResolveOutputPath:
         result = resolve_output_path(target)
         assert result == target
         assert os.path.exists(str(tmp_path / "a" / "b" / "c"))
+
+
+# ---------------------------------------------------------------------------
+# resolve_metadata_path
+# ---------------------------------------------------------------------------
+
+class TestResolveMetadataPath:
+    """Tests for the metadata path resolver (JSON + MD files)."""
+
+    def test_none_output_with_jsonl_source(self, tmp_path, monkeypatch):
+        """None output + JSONL source → output/<jsonl_basename>."""
+        monkeypatch.chdir(tmp_path)
+        result = resolve_metadata_path(None, "prompts.jsonl")
+        assert result == "output/prompts"
+        assert os.path.exists("output")
+
+    def test_bare_filename_with_jsonl_source(self, tmp_path, monkeypatch):
+        """Bare filename output + JSONL source → output/<jsonl_basename>."""
+        monkeypatch.chdir(tmp_path)
+        result = resolve_metadata_path("image.png", "prompts.jsonl")
+        assert result == "output/prompts"
+
+    def test_absolute_path_with_filename_and_source(self, tmp_path):
+        """Absolute path output + source → <dir>/<source_basename>."""
+        result = resolve_metadata_path("/tmp/img.png", "prompts.jsonl")
+        assert result == "/tmp/prompts"
+
+    def test_absolute_path_without_filename(self, tmp_path):
+        """Absolute path without filename + source → <dir>/<source_basename>."""
+        result = resolve_metadata_path("/tmp/", "prompts.jsonl")
+        assert result == "/tmp/prompts"
+
+    def test_none_source_uses_output_basename(self, tmp_path, monkeypatch):
+        """When source_path is None, use output filename (without extension)."""
+        monkeypatch.chdir(tmp_path)
+        result = resolve_metadata_path("image.png", None)
+        assert result == "output/image"
+
+    def test_none_output_none_source(self, tmp_path, monkeypatch):
+        """When both output and source are None, use 'metadata' as name."""
+        monkeypatch.chdir(tmp_path)
+        result = resolve_metadata_path(None, None)
+        assert result == "output/metadata"
+
+    def test_creates_directory(self, tmp_path, monkeypatch):
+        """The resolver should create the output directory if it doesn't exist."""
+        monkeypatch.chdir(tmp_path)
+        result = resolve_metadata_path(None, "prompts.jsonl")
+        # The directory should exist (resolve_metadata_path creates it)
+        assert os.path.exists("output")
+        # tmp_path fixture handles cleanup automatically
+
 
 
 # ---------------------------------------------------------------------------
