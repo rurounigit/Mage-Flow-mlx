@@ -523,7 +523,8 @@ def main():
     prof.start("text_encode")
     if cached_pos is not None:
         txt_embeds = cached_pos
-        print("  Cache HIT — skipping Qwen encode")
+        if verbose:
+            print("  Cache HIT — skipping Qwen encode")
     else:
         txt_embeds, _ = pipeline.text_encoder.encode_text_to_image(
             prompts=[args.prompt],
