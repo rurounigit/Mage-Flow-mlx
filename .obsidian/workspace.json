@@ -185,6 +185,13 @@
   },
   "active": "524c3f94795a19ce",
   "lastOpenFiles": [
+    "test_prompts_edit.jsonl",
+    "__pycache__/test_edit_worker.cpython-311-pytest-9.1.1.pyc",
+    "__pycache__",
+    "memlog/2026-07-28-edit-worker-implementation.md",
+    "test_edit_worker.py",
+    "mage_mlx/__pycache__/vision_cache.cpython-311.pyc",
+    "mage_mlx/vision_cache.py",
     "memlog/2026-07-28-remove-seed-from-cache-key.md",
     "test_prompts.md",
     "test_10_shoe.md",
@@ -195,12 +202,7 @@
     "models/microsoft_Mage-Flow-Turbo/embedding_cache/550367dbefecff8a78636b2dd023ab2ee8da9d5f8408b8e14131179e19e5d08a.json",
     "models/microsoft_Mage-Flow-Turbo/embedding_cache/550367dbefecff8a78636b2dd023ab2ee8da9d5f8408b8e14131179e19e5d08a.npy",
     "models/microsoft_Mage-Flow-Turbo/embedding_cache/c75d40116021bd1edac1667911691591df1fd91c4c0d8a6b6fd364b4143493b9.json",
-    "models/microsoft_Mage-Flow-Turbo/embedding_cache/c75d40116021bd1edac1667911691591df1fd91c4c0d8a6b6fd364b4143493b9.npy",
     "test_10_shoe.png",
-    "models/microsoft_Mage-Flow-Turbo/embedding_cache/7344b83c729565825b3c2a6df0c0ca5adbf38b6ec28b5a607eac2bc331dedfb7.json",
-    "models/microsoft_Mage-Flow-Turbo/embedding_cache/7344b83c729565825b3c2a6df0c0ca5adbf38b6ec28b5a607eac2bc331dedfb7.npy",
-    "models/microsoft_Mage-Flow-Turbo/embedding_cache/8f93eb77e17933241b9d999487c782d7cb8af14eed5732815a70cc6637fcd831.json",
-    "models/microsoft_Mage-Flow-Turbo/embedding_cache/8f93eb77e17933241b9d999487c782d7cb8af14eed5732815a70cc6637fcd831.npy",
     "test_10_shoe_edited.png"
   ]
 }

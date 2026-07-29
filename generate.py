@@ -127,6 +127,11 @@ def main():
         help="Run in persistent JSONL worker mode: load models once, process prompts from JSONL file"
     )
     parser.add_argument(
+        "--edit", action="store_true",
+        help="Run in edit worker mode: same as --worker but for image editing (requires --worker JSONL with image/ref_images fields)"
+    )
+
+    parser.add_argument(
         "--benchmark-cleanup", action="store_true",
         help="Benchmark all 4 Qwen cleanup strategies (unload, gc, clear_cache, all)"
     )
@@ -154,6 +159,10 @@ def main():
     # Validate: need either --prompt or --worker
     if args.worker is None and args.prompt is None:
         parser.error("either --prompt or --worker is required")
+
+    # Validate: --edit requires --worker
+    if args.edit and args.worker is None:
+        parser.error("--edit requires --worker to be set")
 
     # Validate dimensions
     if args.height <= 0 or args.width <= 0 or args.height % 16 or args.width % 16:
@@ -290,6 +299,48 @@ def main():
                 base_path = os.path.splitext(args.worker)[0]
                 print(f"\n  Metadata saved to {_C.GREEN}{base_path}.json{_C.RESET} and {_C.GREEN}{base_path}.md{_C.RESET}")
         return
+
+    # --- Edit worker mode ---
+    if args.worker and args.edit:
+        from mage_mlx.worker import run_edit_worker
+
+        defaults = {
+            "model": args.model,
+            "steps": args.steps,
+            "height": args.height,
+            "width": args.width,
+            "seed": args.seed,
+            "guidance": args.guidance,
+            "negative_prompt": args.negative_prompt,
+            "quantize": args.quantize,
+            "renormalization": args.renormalization,
+        }
+        metadata, prompt_metadata = run_edit_worker(
+            args.worker,
+            defaults,
+            profiler=prof,
+            metadata_enabled=args.metadata,
+            report=report,
+        )
+        prof.stop("total_wall_clock")
+        if report:
+            report.stop_phase("total_wall_clock", prof.get_elapsed("total_wall_clock") or 0.0)
+            peak_ram = prof.get_peak_rss_gib()
+            if peak_ram is None and metadata:
+                peak_ram = metadata.get("peak_memory_gib")
+            if metadata is not None and peak_ram is not None:
+                metadata["peak_memory_gib"] = peak_ram
+            report.print_summary(
+                total_time=prof.get_elapsed("total_wall_clock") or 0.0,
+                peak_ram=peak_ram or 0.0,
+                show_text_encode=True,
+            )
+            report.print_run_metadata(metadata or {})
+            if args.metadata:
+                base_path = os.path.splitext(args.worker)[0]
+                print(f"\n  Metadata saved to {_C.GREEN}{base_path}.json{_C.RESET} and {_C.GREEN}{base_path}.md{_C.RESET}")
+        return
+
 
     # --- Benchmark cleanup mode ---
     if args.benchmark_cleanup:

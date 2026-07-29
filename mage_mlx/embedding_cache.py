@@ -56,6 +56,7 @@ class EmbeddingCache:
         negative_prompt: str = " ",
         te_path: Optional[str] = None,
         template_version: int = TOKENIZER_VERSION,
+        ref_image_hashes: Optional[list[str]] = None,
     ) -> str:
         """Build a cache key from prompt content and encoder signature.
 
@@ -64,6 +65,8 @@ class EmbeddingCache:
         - The negative prompt
         - The text-encoder checkpoint signature (size + mtime)
         - The tokenizer/template version
+        - Reference image hashes (for edit mode, where embeddings depend
+          on both prompt text and reference images)
 
         The generation seed is intentionally excluded: text embeddings are
         seed-independent (the seed only affects DiT latent initialization,
@@ -75,6 +78,10 @@ class EmbeddingCache:
             negative_prompt: Negative prompt text
             te_path: Path to text_encoder.safetensors (for signature)
             template_version: Version of the chat template
+            ref_image_hashes: Optional list of SHA-256 hashes of reference
+                image bytes. When provided, the cache key is extended to
+                include them, so edit embeddings (which are multimodal)
+                are cached separately from text-only embeddings.
 
         Returns:
             SHA-256 hex digest string
@@ -98,6 +105,8 @@ class EmbeddingCache:
             "negative_prompt": formatted_neg,
             "te_signature": te_signature,
         }
+        if ref_image_hashes:
+            key_data["ref_image_hashes"] = sorted(ref_image_hashes)
         key_str = json.dumps(key_data, sort_keys=True)
         return hashlib.sha256(key_str.encode("utf-8")).hexdigest()
 
