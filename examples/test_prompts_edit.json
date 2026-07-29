@@ -1,0 +1,806 @@
+{
+  "metadata": {
+    "model": "microsoft/Mage-Flow-Edit-Turbo",
+    "base_model": "MageFlow",
+    "generation_time_seconds": 193.8,
+    "created_at": "2026-07-29T20:43:18.214122",
+    "image_path": null,
+    "image_paths": null,
+    "image_strength": null,
+    "peak_memory_gib": 8.27
+  },
+  "phases": [
+    {
+      "name": "python_startup",
+      "elapsed": 2.879183739423752e-05,
+      "peak_rss_gib": 0.2177734375,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "pipeline_load",
+      "elapsed": 3.7039740418549627,
+      "peak_rss_gib": 8.266076393425465,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "text_encoder_unload",
+      "elapsed": 0.1615352500230074,
+      "peak_rss_gib": 0.462127685546875,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "dit_load",
+      "elapsed": 1.4766495830845088,
+      "peak_rss_gib": 7.923953427001834,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_load",
+      "elapsed": 8.33999365568161e-07,
+      "peak_rss_gib": 7.923953427001834,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_encode_ref_1",
+      "elapsed": 0.00034562498331069946,
+      "peak_rss_gib": 7.854559315368533,
+      "metadata": {
+        "cache": "HIT"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_1",
+      "elapsed": 3.676780582871288,
+      "peak_rss_gib": 7.865271795541048,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_2",
+      "elapsed": 3.6020733329933137,
+      "peak_rss_gib": 7.865271795541048,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_3",
+      "elapsed": 3.675882250070572,
+      "peak_rss_gib": 7.865271795541048,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_4",
+      "elapsed": 3.586068541975692,
+      "peak_rss_gib": 7.865271795541048,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_decode",
+      "elapsed": 0.35720329079777,
+      "peak_rss_gib": 7.86334915086627,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "generation_1",
+      "elapsed": 15.002058582846075,
+      "peak_rss_gib": 7.86334915086627,
+      "metadata": {
+        "prompt": "change the shoe to metallic green mesh with a translucent  sole and subtle fur details. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
+        "resolution": "1024x1024",
+        "steps": "4",
+        "quantize": "None",
+        "seed": "42"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "save_1",
+      "elapsed": 0.1994293751195073,
+      "peak_rss_gib": 7.86334915086627,
+      "metadata": {},
+      "saved_file": "output/test_10_shoe_edited_worker_01.png"
+    },
+    {
+      "name": "vae_encode_ref_2",
+      "elapsed": 0.0005554999224841595,
+      "peak_rss_gib": 7.86237258836627,
+      "metadata": {
+        "cache": "HIT"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_1",
+      "elapsed": 3.6150542080868036,
+      "peak_rss_gib": 7.872139243409038,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_2",
+      "elapsed": 3.573150500189513,
+      "peak_rss_gib": 7.872139243409038,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_3",
+      "elapsed": 3.5931867079343647,
+      "peak_rss_gib": 7.872139209881425,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_4",
+      "elapsed": 3.572043834021315,
+      "peak_rss_gib": 7.872139209881425,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_decode",
+      "elapsed": 0.3407599579077214,
+      "peak_rss_gib": 7.8643266670405865,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "generation_2",
+      "elapsed": 14.763400375144556,
+      "peak_rss_gib": 7.8643266670405865,
+      "metadata": {
+        "prompt": "change the shoe to deep blue polished leather with a translucent smoke-gray sole and subtle chrome details. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
+        "resolution": "1024x1024",
+        "steps": "4",
+        "quantize": "None",
+        "seed": "43"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "save_2",
+      "elapsed": 0.19513445813208818,
+      "peak_rss_gib": 7.8643266670405865,
+      "metadata": {},
+      "saved_file": "output/test_10_shoe_edited_worker_02.png"
+    },
+    {
+      "name": "vae_encode_ref_3",
+      "elapsed": 0.0004380829632282257,
+      "peak_rss_gib": 7.8633501045405865,
+      "metadata": {
+        "cache": "HIT"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_1",
+      "elapsed": 3.6343898330815136,
+      "peak_rss_gib": 7.873116759583354,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_2",
+      "elapsed": 3.681456749793142,
+      "peak_rss_gib": 7.873116759583354,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_3",
+      "elapsed": 3.7286733749788254,
+      "peak_rss_gib": 7.873116759583354,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_4",
+      "elapsed": 3.7644082501064986,
+      "peak_rss_gib": 7.873116759583354,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_decode",
+      "elapsed": 0.3404769168701023,
+      "peak_rss_gib": 7.865304216742516,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "generation_3",
+      "elapsed": 15.215968333883211,
+      "peak_rss_gib": 7.865304216742516,
+      "metadata": {
+        "prompt": "change the shoe to a matte black finish with a red-orange translucent sole and small green accents. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
+        "resolution": "1024x1024",
+        "steps": "4",
+        "quantize": "None",
+        "seed": "44"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "save_3",
+      "elapsed": 0.19824699987657368,
+      "peak_rss_gib": 7.865304216742516,
+      "metadata": {},
+      "saved_file": "output/test_10_shoe_edited_worker_03.png"
+    },
+    {
+      "name": "vae_encode_ref_4",
+      "elapsed": 0.0005408339202404022,
+      "peak_rss_gib": 7.864327654242516,
+      "metadata": {
+        "cache": "HIT"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_1",
+      "elapsed": 3.758578083012253,
+      "peak_rss_gib": 7.8740635719150305,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_2",
+      "elapsed": 3.8055483330972493,
+      "peak_rss_gib": 7.8740635719150305,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_3",
+      "elapsed": 3.867613875074312,
+      "peak_rss_gib": 7.8740635719150305,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_4",
+      "elapsed": 3.8967680828645825,
+      "peak_rss_gib": 7.8740635719150305,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_decode",
+      "elapsed": 0.34458937495946884,
+      "peak_rss_gib": 7.866250995546579,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "generation_4",
+      "elapsed": 15.745650500059128,
+      "peak_rss_gib": 7.866250995546579,
+      "metadata": {
+        "prompt": "change the shoe to beige canvas with a solid white sole and navy blue stitching. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
+        "resolution": "1024x1024",
+        "steps": "4",
+        "quantize": "None",
+        "seed": "45"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "save_4",
+      "elapsed": 0.2216519578360021,
+      "peak_rss_gib": 7.866250995546579,
+      "metadata": {},
+      "saved_file": "output/test_10_shoe_edited_worker_04.png"
+    },
+    {
+      "name": "vae_encode_ref_5",
+      "elapsed": 0.0004069169517606497,
+      "peak_rss_gib": 7.865274433046579,
+      "metadata": {
+        "cache": "HIT"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_1",
+      "elapsed": 3.8013710000086576,
+      "peak_rss_gib": 7.875010350719094,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_2",
+      "elapsed": 3.9015145420562476,
+      "peak_rss_gib": 7.875010350719094,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_3",
+      "elapsed": 3.9557724171318114,
+      "peak_rss_gib": 7.875010350719094,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_4",
+      "elapsed": 4.01132904086262,
+      "peak_rss_gib": 7.875010350719094,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_decode",
+      "elapsed": 0.38897716579958797,
+      "peak_rss_gib": 7.867197807878256,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "generation_5",
+      "elapsed": 16.12702454207465,
+      "peak_rss_gib": 7.867197807878256,
+      "metadata": {
+        "prompt": "change the shoe to full gray suede with an off-white sole and silver eyelets. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
+        "resolution": "1024x1024",
+        "steps": "4",
+        "quantize": "None",
+        "seed": "46"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "save_5",
+      "elapsed": 0.2218177078757435,
+      "peak_rss_gib": 7.867197807878256,
+      "metadata": {},
+      "saved_file": "output/test_10_shoe_edited_worker_05.png"
+    },
+    {
+      "name": "vae_encode_ref_6",
+      "elapsed": 0.0006010418292135,
+      "peak_rss_gib": 7.866221245378256,
+      "metadata": {
+        "cache": "HIT"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_1",
+      "elapsed": 4.027070708805695,
+      "peak_rss_gib": 7.875988377258182,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_2",
+      "elapsed": 4.194190792040899,
+      "peak_rss_gib": 7.875988377258182,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_3",
+      "elapsed": 4.09084741701372,
+      "peak_rss_gib": 7.875988377258182,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_4",
+      "elapsed": 4.1509674589615315,
+      "peak_rss_gib": 7.875988377258182,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_decode",
+      "elapsed": 0.3729982920922339,
+      "peak_rss_gib": 7.868175834417343,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "generation_6",
+      "elapsed": 16.912076709093526,
+      "peak_rss_gib": 7.868175834417343,
+      "metadata": {
+        "prompt": "change the shoe to iridescent fabric with a glowing blue translucent sole and purple laces. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
+        "resolution": "1024x1024",
+        "steps": "4",
+        "quantize": "None",
+        "seed": "47"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "save_6",
+      "elapsed": 0.216226875083521,
+      "peak_rss_gib": 7.868175834417343,
+      "metadata": {},
+      "saved_file": "output/test_10_shoe_edited_worker_06.png"
+    },
+    {
+      "name": "vae_encode_ref_7",
+      "elapsed": 0.0004976249765604734,
+      "peak_rss_gib": 7.8671992383897305,
+      "metadata": {
+        "cache": "HIT"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_1",
+      "elapsed": 4.200592749984935,
+      "peak_rss_gib": 7.876935852691531,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_2",
+      "elapsed": 4.442543499870226,
+      "peak_rss_gib": 7.876935852691531,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_3",
+      "elapsed": 4.625228082993999,
+      "peak_rss_gib": 7.876935852691531,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_4",
+      "elapsed": 4.79327949997969,
+      "peak_rss_gib": 7.876935852691531,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_decode",
+      "elapsed": 0.450227958150208,
+      "peak_rss_gib": 7.869123309850693,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "generation_7",
+      "elapsed": 18.584230290958658,
+      "peak_rss_gib": 7.869123309850693,
+      "metadata": {
+        "prompt": "change the shoe to reflective silver material with a clear sole and bright yellow pull tabs. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
+        "resolution": "1024x1024",
+        "steps": "4",
+        "quantize": "None",
+        "seed": "48"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "save_7",
+      "elapsed": 0.19076195801608264,
+      "peak_rss_gib": 7.869123309850693,
+      "metadata": {},
+      "saved_file": "output/test_10_shoe_edited_worker_07.png"
+    },
+    {
+      "name": "vae_encode_ref_8",
+      "elapsed": 0.0004302500747144222,
+      "peak_rss_gib": 7.868146747350693,
+      "metadata": {
+        "cache": "HIT"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_1",
+      "elapsed": 4.866636875085533,
+      "peak_rss_gib": 7.8778833616524935,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_2",
+      "elapsed": 5.256080749910325,
+      "peak_rss_gib": 7.8778833616524935,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_3",
+      "elapsed": 5.538224207935855,
+      "peak_rss_gib": 7.8778833616524935,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_4",
+      "elapsed": 5.72663658298552,
+      "peak_rss_gib": 7.8778833616524935,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_decode",
+      "elapsed": 0.5306694579776376,
+      "peak_rss_gib": 7.870070818811655,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "generation_8",
+      "elapsed": 21.990952792111784,
+      "peak_rss_gib": 7.870070818811655,
+      "metadata": {
+        "prompt": "change the shoe to light pink woven textile with a translucent pink sole and white embroidered details. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
+        "resolution": "1024x1024",
+        "steps": "4",
+        "quantize": "None",
+        "seed": "49"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "save_8",
+      "elapsed": 0.1901270831003785,
+      "peak_rss_gib": 7.870070818811655,
+      "metadata": {},
+      "saved_file": "output/test_10_shoe_edited_worker_08.png"
+    },
+    {
+      "name": "vae_encode_ref_9",
+      "elapsed": 0.0004961658269166946,
+      "peak_rss_gib": 7.869094256311655,
+      "metadata": {
+        "cache": "HIT"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_1",
+      "elapsed": 5.850050291977823,
+      "peak_rss_gib": 7.878830837085843,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_2",
+      "elapsed": 6.21060312516056,
+      "peak_rss_gib": 7.878830837085843,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_3",
+      "elapsed": 6.4383332908619195,
+      "peak_rss_gib": 7.878830837085843,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_4",
+      "elapsed": 6.364378249971196,
+      "peak_rss_gib": 7.878830837085843,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_decode",
+      "elapsed": 0.5660924999974668,
+      "peak_rss_gib": 7.871018294245005,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "generation_9",
+      "elapsed": 25.50483120791614,
+      "peak_rss_gib": 7.871018294245005,
+      "metadata": {
+        "prompt": "change the shoe to black knitted mesh with a black sole and a reflective silver stripe. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
+        "resolution": "1024x1024",
+        "steps": "4",
+        "quantize": "None",
+        "seed": "50"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "save_9",
+      "elapsed": 0.1908920828718692,
+      "peak_rss_gib": 7.871018294245005,
+      "metadata": {},
+      "saved_file": "output/test_10_shoe_edited_worker_09.png"
+    },
+    {
+      "name": "vae_encode_ref_10",
+      "elapsed": 0.0005871669854968786,
+      "peak_rss_gib": 7.870041731745005,
+      "metadata": {
+        "cache": "HIT"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_1",
+      "elapsed": 6.391514374874532,
+      "peak_rss_gib": 7.87980886362493,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_2",
+      "elapsed": 6.371287000132725,
+      "peak_rss_gib": 7.87980886362493,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_3",
+      "elapsed": 6.4002335839904845,
+      "peak_rss_gib": 7.87980886362493,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_4",
+      "elapsed": 6.333477040985599,
+      "peak_rss_gib": 7.87980886362493,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_decode",
+      "elapsed": 0.5657803749199957,
+      "peak_rss_gib": 7.871996320784092,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "generation_10",
+      "elapsed": 26.133789082989097,
+      "peak_rss_gib": 7.871996320784092,
+      "metadata": {
+        "prompt": "change the shoe to olive green nylon with a speckled gum sole and orange lace accents. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
+        "resolution": "1024x1024",
+        "steps": "4",
+        "quantize": "None",
+        "seed": "51"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "save_10",
+      "elapsed": 0.1909375840332359,
+      "peak_rss_gib": 7.871996320784092,
+      "metadata": {},
+      "saved_file": "output/test_10_shoe_edited_worker_10.png"
+    },
+    {
+      "name": "total_wall_clock",
+      "elapsed": 193.84220674983226,
+      "peak_rss_gib": 7.871996320784092,
+      "metadata": {},
+      "saved_file": null
+    }
+  ],
+  "total_wall_clock": 193.84220674983226,
+  "overview": [
+    {
+      "index": 1,
+      "time": 15.002058582846075,
+      "peak_rss_gib": 7.86334915086627,
+      "resolution": "1024x1024",
+      "steps": 4,
+      "seed": 42,
+      "file": "output/test_10_shoe_edited_worker_01.png"
+    },
+    {
+      "index": 2,
+      "time": 14.763400375144556,
+      "peak_rss_gib": 7.8643266670405865,
+      "resolution": "1024x1024",
+      "steps": 4,
+      "seed": 43,
+      "file": "output/test_10_shoe_edited_worker_02.png"
+    },
+    {
+      "index": 3,
+      "time": 15.215968333883211,
+      "peak_rss_gib": 7.865304216742516,
+      "resolution": "1024x1024",
+      "steps": 4,
+      "seed": 44,
+      "file": "output/test_10_shoe_edited_worker_03.png"
+    },
+    {
+      "index": 4,
+      "time": 15.745650500059128,
+      "peak_rss_gib": 7.866250995546579,
+      "resolution": "1024x1024",
+      "steps": 4,
+      "seed": 45,
+      "file": "output/test_10_shoe_edited_worker_04.png"
+    },
+    {
+      "index": 5,
+      "time": 16.12702454207465,
+      "peak_rss_gib": 7.867197807878256,
+      "resolution": "1024x1024",
+      "steps": 4,
+      "seed": 46,
+      "file": "output/test_10_shoe_edited_worker_05.png"
+    },
+    {
+      "index": 6,
+      "time": 16.912076709093526,
+      "peak_rss_gib": 7.868175834417343,
+      "resolution": "1024x1024",
+      "steps": 4,
+      "seed": 47,
+      "file": "output/test_10_shoe_edited_worker_06.png"
+    },
+    {
+      "index": 7,
+      "time": 18.584230290958658,
+      "peak_rss_gib": 7.869123309850693,
+      "resolution": "1024x1024",
+      "steps": 4,
+      "seed": 48,
+      "file": "output/test_10_shoe_edited_worker_07.png"
+    },
+    {
+      "index": 8,
+      "time": 21.990952792111784,
+      "peak_rss_gib": 7.870070818811655,
+      "resolution": "1024x1024",
+      "steps": 4,
+      "seed": 49,
+      "file": "output/test_10_shoe_edited_worker_08.png"
+    },
+    {
+      "index": 9,
+      "time": 25.50483120791614,
+      "peak_rss_gib": 7.871018294245005,
+      "resolution": "1024x1024",
+      "steps": 4,
+      "seed": 50,
+      "file": "output/test_10_shoe_edited_worker_09.png"
+    },
+    {
+      "index": 10,
+      "time": 26.133789082989097,
+      "peak_rss_gib": 7.871996320784092,
+      "resolution": "1024x1024",
+      "steps": 4,
+      "seed": 51,
+      "file": "output/test_10_shoe_edited_worker_10.png"
+    }
+  ],
+  "summary": {
+    "total_time": 193.84220674983226,
+    "peak_ram": 8.266076393425465,
+    "prompts_count": 10,
+    "overhead": 6.219139457214624,
+    "text_encode_time": 1.6430848755408078
+  },
+  "log": [
+    "======================================================================",
+    "  Mage-Flow MLX",
+    "======================================================================",
+    "  Importing Mage-Flow MLX pipeline from models/microsoft_Mage-Flow-Edit-Turbo...",
+    "  Current working directory: /Users/tilman/projects/Mage-Flow-mlx",
+    "  Python executable: /Users/tilman/projects/Mage-Flow-mlx/.venv/bin/python",
+    "  Imported MageFlowPipeline successfully",
+    "  Loaded 10 edit prompts from test_prompts_edit.jsonl"
+  ]
+}
