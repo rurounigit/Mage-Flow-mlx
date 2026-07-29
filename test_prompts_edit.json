@@ -2,87 +2,87 @@
   "metadata": {
     "model": "microsoft/Mage-Flow-Edit-Turbo",
     "base_model": "MageFlow",
-    "generation_time_seconds": null,
-    "created_at": "2026-07-29T15:15:02.711831",
+    "generation_time_seconds": 38.9,
+    "created_at": "2026-07-29T15:52:56.094236",
     "image_path": null,
     "image_paths": null,
     "image_strength": null,
-    "peak_memory_gib": null
+    "peak_memory_gib": 8.27
   },
   "phases": [
     {
       "name": "python_startup",
-      "elapsed": 2.9999995604157448e-05,
-      "peak_rss_gib": 0.217132568359375,
+      "elapsed": 3.208313137292862e-05,
+      "peak_rss_gib": 0.21673583984375,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "pipeline_load",
-      "elapsed": 3.83933254214935,
+      "elapsed": 3.27874349988997,
       "peak_rss_gib": 8.266076393425465,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "text_encoder_unload",
-      "elapsed": 0.2474008749704808,
-      "peak_rss_gib": 0.4140167236328125,
+      "elapsed": 0.17393483291380107,
+      "peak_rss_gib": 0.440582275390625,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_load",
-      "elapsed": 1.489764291094616,
+      "elapsed": 1.4839334159623832,
       "peak_rss_gib": 7.923953427001834,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_load",
-      "elapsed": 9.159557521343231e-07,
+      "elapsed": 8.33999365568161e-07,
       "peak_rss_gib": 7.923953427001834,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "edit_step_1",
-      "elapsed": 3.9863817908335477,
+      "elapsed": 3.8204320420045406,
       "peak_rss_gib": 7.865271795541048,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "edit_step_2",
-      "elapsed": 3.739486333914101,
+      "elapsed": 3.942348999902606,
       "peak_rss_gib": 7.865271795541048,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "edit_step_3",
-      "elapsed": 3.759578833123669,
+      "elapsed": 3.828439832897857,
       "peak_rss_gib": 7.865271795541048,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "edit_step_4",
-      "elapsed": 3.7807724170852453,
+      "elapsed": 3.8522505001164973,
       "peak_rss_gib": 7.865271795541048,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_decode",
-      "elapsed": 1.3130010000895709,
+      "elapsed": 0.36189745902083814,
       "peak_rss_gib": 7.86334915086627,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "generation_1",
-      "elapsed": 16.772653124993667,
+      "elapsed": 15.909207750111818,
       "peak_rss_gib": 7.86334915086627,
       "metadata": {
         "prompt": "change the shoe to metallic green mesh with a translucent  sole and subtle fur details. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
@@ -95,45 +95,102 @@
     },
     {
       "name": "save_1",
-      "elapsed": 0.23181016696617007,
+      "elapsed": 0.24266887502744794,
       "peak_rss_gib": 7.86334915086627,
       "metadata": {},
       "saved_file": "test_10_shoe_edited_worker_01.png"
     },
     {
       "name": "edit_step_1",
-      "elapsed": 4.016208874993026,
+      "elapsed": 4.264977250015363,
       "peak_rss_gib": 7.872139243409038,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "edit_step_2",
-      "elapsed": 3.876145290909335,
+      "elapsed": 3.953913874924183,
       "peak_rss_gib": 7.872139243409038,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "edit_step_3",
-      "elapsed": 3.961762791965157,
+      "elapsed": 4.053823291091248,
       "peak_rss_gib": 7.872139243409038,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_4",
+      "elapsed": 4.191906749969348,
+      "peak_rss_gib": 7.872139243409038,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_decode",
+      "elapsed": 0.4740559591446072,
+      "peak_rss_gib": 7.8643266670405865,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "generation_2",
+      "elapsed": 17.01912279217504,
+      "peak_rss_gib": 7.8643266670405865,
+      "metadata": {
+        "prompt": "change the shoe to deep blue polished leather with a translucent smoke-gray sole and subtle chrome details. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
+        "resolution": "1024x1024",
+        "steps": "4",
+        "quantize": "None",
+        "seed": "43"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "save_2",
+      "elapsed": 0.27148170792497694,
+      "peak_rss_gib": 7.8643266670405865,
+      "metadata": {},
+      "saved_file": "test_10_shoe_edited_worker_02.png"
+    },
+    {
+      "name": "total_wall_clock",
+      "elapsed": 38.91132687497884,
+      "peak_rss_gib": 7.8643266670405865,
       "metadata": {},
       "saved_file": null
     }
   ],
-  "total_wall_clock": null,
+  "total_wall_clock": 38.91132687497884,
   "overview": [
     {
       "index": 1,
-      "time": 16.772653124993667,
+      "time": 15.909207750111818,
       "peak_rss_gib": 7.86334915086627,
       "resolution": "1024x1024",
       "steps": 4,
       "seed": 42,
       "file": "test_10_shoe_edited_worker_01.png"
+    },
+    {
+      "index": 2,
+      "time": 17.01912279217504,
+      "peak_rss_gib": 7.8643266670405865,
+      "resolution": "1024x1024",
+      "steps": 4,
+      "seed": 43,
+      "file": "test_10_shoe_edited_worker_02.png"
     }
   ],
+  "summary": {
+    "total_time": 38.91132687497884,
+    "peak_ram": 8.266076393425465,
+    "prompts_count": 2,
+    "overhead": 4.325127249816433,
+    "text_encode_time": 1.6578690828755498
+  },
   "log": [
     "======================================================================",
     "  Mage-Flow MLX",

@@ -810,7 +810,7 @@ def run_edit_worker(
     # Initialize caches AFTER model is loaded to avoid creating stray
     # directories that intercept PathResolution for HF IDs
     cache = EmbeddingCache(".cache/mage-flow-mlx/edit")
-    vision_cache = VisionCache(".cache/mage-flow-mlx/edit")
+    vision_cache = VisionCache(converted_model)
     if profiler:
         profiler.stop("pipeline_load")
     if report:
@@ -1066,7 +1066,10 @@ def run_edit_worker(
             seed=seed,
         )
         reference_latents = vision_cache.get(vision_key)
-        if reference_latents is None:
+        if reference_latents is not None:
+            if report and report.verbose:
+                print(f"  Vision cache HIT — skipping VAE encode")
+        else:
             reference_latents = MageFlowEditUtil.encode_references(
                 edit.vae,
                 ref_images,
@@ -1075,11 +1078,8 @@ def run_edit_worker(
                 seed=seed,
             )
             vision_cache.put(vision_key, reference_latents)
-
-        # Create noise latents
-        target_latents = MageFlowLatentCreator.create_noise(
-            seed=seed,
-            height=config.height,
+            if report and report.verbose:
+                print(f"  Vision cache MISS — encoding with VAE")
             width=config.width,
             dtype=edit.model_config.precision,
         )

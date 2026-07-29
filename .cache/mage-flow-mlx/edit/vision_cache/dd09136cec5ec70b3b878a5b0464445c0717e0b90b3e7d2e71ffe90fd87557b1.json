@@ -1,9 +1,0 @@
-{
-  "dtype": "mlx.core.bfloat16",
-  "shape": [
-    1,
-    4096,
-    128
-  ],
-  "version": 2
-}

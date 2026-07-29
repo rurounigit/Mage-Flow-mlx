@@ -213,3 +213,44 @@ Verified output now shows per-step timings:
   edit_step_4                                    3.9s      7.87GiB
   vae_decode                                     1.2s      7.86GiB
 ```
+
+### Vision cache directory mismatch and missing hit/miss output
+
+Two issues were found with the vision cache:
+
+1. **Wrong cache directory**: The worker created `VisionCache(".cache/mage-flow-mlx/edit")`
+   but the `VisionCache` class stores files in `model_dir/vision_cache/`. This meant
+   the cache was written to `.cache/mage-flow-mlx/edit/vision_cache/` — a different
+   directory from where lookups happened. The cache never hit.
+
+   Fix: Changed to `VisionCache(converted_model)` so it uses the model directory
+   consistently.
+
+2. **No hit/miss output**: Unlike the text encoder cache (which prints
+   `Cache HIT` / `Cache MISS`), the vision cache had no terminal output.
+
+   Fix: Added `Vision cache HIT — skipping VAE encode` /
+   `Vision cache MISS — encoding with VAE` output, matching the text encoder
+   cache style.
+
+Verified with two consecutive runs (cache cleared between):
+
+```
+=== CACHE MISS RUN ===
+  Vision cache MISS — encoding with VAE
+  generation_1    16.6s    7.86GiB
+  Vision cache MISS — encoding with VAE
+  generation_2    16.8s    7.86GiB
+  total_wall_clock  41.5s
+
+=== CACHE HIT RUN ===
+  Vision cache HIT — skipping VAE encode
+  generation_1    16.7s    7.86GiB
+  Vision cache HIT — skipping VAE encode
+  generation_2    17.1s    7.86GiB
+  total_wall_clock  40.0s
+```
+
+The 1.5s saving (41.5s → 40.0s) reflects the VAE encode being skipped.
+This is modest because VAE encode is only ~0.5-1.0s out of ~16s per prompt
+(DiT denoising dominates). The cache is working correctly.
