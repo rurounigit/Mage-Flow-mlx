@@ -37,6 +37,7 @@ from typing import Any, Optional
 import mlx.core as mx
 
 from .profiler import Profiler
+from mage_mlx.mflux_src.mflux.models.mage_flow.variants.conditioning import MageFlowConditioning
 
 
 # Parameters that require a full pipeline reload
@@ -196,7 +197,7 @@ def run_worker(
     prompts = load_prompts(jsonl_path)
     if not prompts:
         print("No valid prompts found in JSONL file.")
-        return None
+        return None, None
 
     if report and report.verbose:
         print(f"  Loaded {len(prompts)} prompts from {jsonl_path}")
@@ -731,7 +732,7 @@ def run_edit_worker(
     prompts = load_edit_prompts(jsonl_path)
     if not prompts:
         print("No valid prompts found in JSONL file.")
-        return None
+        return None, None
 
     if report and report.verbose:
         print(f"  Loaded {len(prompts)} edit prompts from {jsonl_path}")
@@ -768,10 +769,6 @@ def run_edit_worker(
             report.stop_phase(name, elapsed or 0.0, rss, loading_mode=loading_mode)
         profiler.on_phase_complete = _on_phase_complete
 
-    # Initialize caches
-    cache = EmbeddingCache(defaults.get("model", "models/microsoft_Mage-Flow-Edit-Turbo"))
-    vision_cache = VisionCache(defaults.get("model", "models/microsoft_Mage-Flow-Edit-Turbo"))
-
     # Track current pipeline state
     current_params: dict[str, Any] = {}
     edit: Optional[MageFlowEdit] = None
@@ -781,15 +778,34 @@ def run_edit_worker(
     first_params = merge_params(defaults, prompts[0])
     if profiler:
         profiler.start("pipeline_load")
+    # Load text encoder from shared path (text encoder is shared across all models)
+    from mage_mlx.pipeline import resolve_text_encoder_path
+    te_weights_path = resolve_text_encoder_path(first_params["model"])
+    from mage_mlx.text_encoder import MageFlowTextEncoder
+    te = MageFlowTextEncoder(
+        model_path=te_weights_path if os.path.exists(te_weights_path) else None,
+    )
+
     edit = MageFlowEdit(
         quantize=first_params.get("quantize"),
         model_path=first_params["model"],
         load_dit_vae=False,
+        text_encoder=te,
     )
+    # Set tokenizer from Qwen/Qwen3-VL-8B-Instruct (cached from regular worker)
+    from transformers import AutoTokenizer
+    from mage_mlx.pipeline import MageFlowTokenizer
+    raw_tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-VL-8B-Instruct")
+    edit.tokenizers = {"mage": MageFlowTokenizer(raw_tokenizer)}
     te_path = os.path.join(first_params["model"], "text_encoder.safetensors")
     if not os.path.exists(te_path):
         te_path = None
     current_params = dict(first_params)
+
+    # Initialize caches AFTER model is loaded to avoid creating stray
+    # directories that intercept PathResolution for HF IDs
+    cache = EmbeddingCache("models/microsoft_Mage-Flow-Edit-Turbo")
+    vision_cache = VisionCache("models/microsoft_Mage-Flow-Edit-Turbo")
     if profiler:
         profiler.stop("pipeline_load")
     if report:
@@ -837,10 +853,11 @@ def run_edit_worker(
             if params.get("guidance", 1.0) > 1.0:
                 if profiler:
                     profiler.start(f"text_encode_neg_{i + 1}")
-                neg_embeds, neg_mask = edit.text_encoder.encode_edit(
+                neg_embeds, neg_mask = MageFlowConditioning.encode_edit(
                     prompts=[params.get("negative_prompt", " ")],
                     images_per_prompt=[ref_images],
                     tokenizer=edit.tokenizers["mage"],
+                    text_encoder=edit.text_encoder,
                     max_sequence_length=2048,
                 )
                 mx.eval(neg_embeds, neg_mask)
@@ -864,10 +881,11 @@ def run_edit_worker(
                 profiler.start(f"text_encode_{i + 1}")
 
             # Encode positive edit prompt (Qwen stays loaded)
-            pos_embeds, pos_mask = edit.text_encoder.encode_edit(
+            pos_embeds, pos_mask = MageFlowConditioning.encode_edit(
                 prompts=[params["prompt"]],
                 images_per_prompt=[ref_images],
                 tokenizer=edit.tokenizers["mage"],
+                text_encoder=edit.text_encoder,
                 max_sequence_length=2048,
             )
             mx.eval(pos_embeds, pos_mask)
@@ -879,10 +897,11 @@ def run_edit_worker(
             neg_embeds = None
             neg_mask = None
             if params.get("guidance", 1.0) > 1.0:
-                neg_embeds, neg_mask = edit.text_encoder.encode_edit(
+                neg_embeds, neg_mask = MageFlowConditioning.encode_edit(
                     prompts=[params.get("negative_prompt", " ")],
                     images_per_prompt=[ref_images],
                     tokenizer=edit.tokenizers["mage"],
+                    text_encoder=edit.text_encoder,
                     max_sequence_length=2048,
                 )
                 mx.eval(neg_embeds, neg_mask)

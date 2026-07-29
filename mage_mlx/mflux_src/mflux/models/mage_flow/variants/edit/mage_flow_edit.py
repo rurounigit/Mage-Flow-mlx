@@ -1,3 +1,4 @@
+from typing import Optional
 import hashlib
 from pathlib import Path
 
@@ -46,6 +47,7 @@ class MageFlowEdit(nn.Module):
         model_path: str | None = None,
         model_config: ModelConfig | None = None,
         load_dit_vae: bool = True,
+        text_encoder: Optional[MageFlowTextEncoder] = None,
     ):
         super().__init__()
         self._model_config = model_config or ModelConfig.mage_flow_edit()
@@ -57,23 +59,33 @@ class MageFlowEdit(nn.Module):
             quantize=quantize,
             model_path=model_path,
             load_dit_vae=load_dit_vae,
+            text_encoder=text_encoder,
         )
 
-    def load_dit_vae(self, profiler=None) -> None:
-        """Lazy-load DiT and VAE after text encoding is complete."""
+    def load_dit_vae(self, model_dir: str | None = None, quantize: int | None = None, profiler=None) -> None:
+        """Lazy-load DiT and VAE after text encoding is complete.
+
+        When ``text_encoder`` is already loaded (pre-loaded by the worker),
+        the text_encoder component is skipped during weight loading since
+        the edit model does not include text_encoder weights (they are
+        shared from the base model).
+        """
         if profiler is not None:
             profiler.start("dit_load")
         from mage_mlx.mflux_src.mflux.models.common.weights.loading.weight_applier import WeightApplier
 
-        root_path = MageFlowInitializer._resolve_model_path(self._model_path)
-        weights = MageFlowInitializer._load_weights(root_path)
+        model_path = model_dir or self._model_path
+        root_path = MageFlowInitializer._resolve_model_path(model_path)
+        # Skip text_encoder if already loaded (shared from base model)
+        skip_components = {"text_encoder"} if self.text_encoder is not None else None
+        weights = MageFlowInitializer._load_weights(root_path, skip_components=skip_components)
         self.vae = MageVAE(sample_posterior=True)
         self.transformer = MageFlowTransformer(**self._model_config.transformer_overrides)
         vae_weights = weights.components["vae"]
         MageFlowWeightDefinition.prepare_vae_for_loading(self.vae, vae_weights)
         self.bits = WeightApplier.apply_and_quantize(
             weights=weights,
-            quantize_arg=self._quantize,
+            quantize_arg=quantize if quantize is not None else self._quantize,
             weight_definition=MageFlowWeightDefinition,
             models={
                 "vae": self.vae,

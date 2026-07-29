@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import mlx.core as mx
@@ -26,16 +27,27 @@ class MageFlowInitializer:
         quantize: int | None,
         model_path: str | None = None,
         load_dit_vae: bool = True,
+        text_encoder=None,
     ) -> None:
         path = model_path or model_config.model_name
         root_path = MageFlowInitializer._resolve_model_path(path)
         MageFlowInitializer._init_config(model, model_config)
-        weights = MageFlowInitializer._load_weights(root_path)
-        MageFlowWeightDefinition.validate_loaded_weights(weights)
-        MageFlowInitializer._init_tokenizers(model, root_path)
-        MageFlowInitializer._init_models(model, model_config, load_dit_vae)
-        MageFlowInitializer._validate_hf_model_coverage(model, weights, load_dit_vae)
-        MageFlowInitializer._apply_weights(model, weights, quantize, load_dit_vae)
+        skip_components = {"text_encoder"} if text_encoder is not None else None
+        weights = MageFlowInitializer._load_weights(root_path, skip_components=skip_components)
+        if text_encoder is None:
+            MageFlowWeightDefinition.validate_loaded_weights(weights)
+        # When text_encoder is pre-loaded, tokenizers come from the shared TE path
+        tokenizer_path = None
+        if text_encoder is not None:
+            from mage_mlx.pipeline import resolve_text_encoder_path
+            te_path = resolve_text_encoder_path(path)
+            if os.path.exists(te_path):
+                tokenizer_path = Path(te_path)
+        MageFlowInitializer._init_tokenizers(model, root_path, tokenizer_path=tokenizer_path)
+        MageFlowInitializer._init_models(model, model_config, load_dit_vae, text_encoder=text_encoder)
+        if text_encoder is None:
+            MageFlowInitializer._validate_hf_model_coverage(model, weights, load_dit_vae)
+        MageFlowInitializer._apply_weights(model, weights, quantize, load_dit_vae, text_encoder=text_encoder)
 
         del weights
         mx.eval(model)
@@ -64,22 +76,32 @@ class MageFlowInitializer:
         model.lora_scales = None
 
     @staticmethod
-    def _load_weights(model_path: Path) -> LoadedWeights:
+    def _load_weights(model_path: Path, skip_components: set[str] | None = None) -> LoadedWeights:
         return WeightLoader.load(
             weight_definition=MageFlowWeightDefinition,
             model_path=str(model_path),
+            skip_components=skip_components,
         )
 
     @staticmethod
-    def _init_tokenizers(model, model_path: Path) -> None:
-        model.tokenizers = TokenizerLoader.load_all(
-            definitions=MageFlowWeightDefinition.get_tokenizers(),
-            model_path=str(model_path),
-        )
+    def _init_tokenizers(model, model_path: Path, tokenizer_path: Path | None = None) -> None:
+        resolved_path = tokenizer_path if tokenizer_path is not None else model_path
+        try:
+            model.tokenizers = TokenizerLoader.load_all(
+                definitions=MageFlowWeightDefinition.get_tokenizers(),
+                model_path=str(resolved_path),
+            )
+        except FileNotFoundError:
+            # Tokenizers not available locally (e.g., edit models without tokenizer files).
+            # The caller (worker) is responsible for setting model.tokenizers.
+            model.tokenizers = {}
 
     @staticmethod
-    def _init_models(model, model_config: ModelConfig, load_dit_vae: bool = True) -> None:
-        model.text_encoder = MageFlowTextEncoder(**model_config.text_encoder_overrides)
+    def _init_models(model, model_config: ModelConfig, load_dit_vae: bool = True, text_encoder=None) -> None:
+        if text_encoder is not None:
+            model.text_encoder = text_encoder
+        else:
+            model.text_encoder = MageFlowTextEncoder(**model_config.text_encoder_overrides)
         if load_dit_vae:
             model.vae = MageVAE(sample_posterior=True)
             model.transformer = MageFlowTransformer(**model_config.transformer_overrides)
@@ -88,7 +110,15 @@ class MageFlowInitializer:
             model.transformer = None
 
     @staticmethod
-    def _apply_weights(model, weights: LoadedWeights, quantize: int | None, load_dit_vae: bool = True) -> None:
+    def _apply_weights(model, weights: LoadedWeights, quantize: int | None, load_dit_vae: bool = True, text_encoder=None) -> None:
+        if text_encoder is None:
+            te_weights = weights.components["text_encoder"]
+            WeightApplier.apply_and_quantize(
+                weights=LoadedWeights(components={"text_encoder": te_weights}, meta_data=weights.meta_data),
+                quantize_arg=quantize,
+                weight_definition=MageFlowWeightDefinition,
+                models={"text_encoder": model.text_encoder},
+            )
         if load_dit_vae:
             vae_weights = weights.components["vae"]
             MageFlowWeightDefinition.prepare_vae_for_loading(model.vae, vae_weights)
@@ -104,14 +134,15 @@ class MageFlowInitializer:
             )
             MageFlowWeightDefinition.finalize_vae_after_loading(model.vae, vae_weights)
         else:
-            model.bits = WeightApplier.apply_and_quantize(
-                weights=weights,
-                quantize_arg=quantize,
-                weight_definition=MageFlowWeightDefinition,
-                models={
-                    "text_encoder": model.text_encoder,
-                },
-            )
+            if text_encoder is None:
+                model.bits = WeightApplier.apply_and_quantize(
+                    weights=weights,
+                    quantize_arg=quantize,
+                    weight_definition=MageFlowWeightDefinition,
+                    models={
+                        "text_encoder": model.text_encoder,
+                    },
+                )
 
     @staticmethod
     def _validate_hf_model_coverage(model, weights: LoadedWeights, load_dit_vae: bool = True) -> None:

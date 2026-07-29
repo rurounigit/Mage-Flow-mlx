@@ -151,8 +151,8 @@ def main():
     model_was_explicit = args.model is not None
     if args.model is None:
         args.model = (
-            "microsoft/Mage-Flow-Edit-Turbo"
-            if args.image is not None
+            "models/microsoft_Mage-Flow-Edit-Turbo"
+            if args.image is not None or args.edit
             else "models/microsoft_Mage-Flow-Turbo"
         )
 
@@ -260,7 +260,7 @@ def main():
         )
 
     # --- Worker mode ---
-    if args.worker:
+    if args.worker and not args.edit:
         from mage_mlx.worker import run_worker
 
         defaults = {
