@@ -7,3 +7,4 @@
 {"prompt": "A close-up portrait of an elderly African man with deep wrinkles, wearing a traditional hat, soft natural lighting, ultra realistic.", "seed": 42, "output": "test_07_old_man_new.png"}
 {"prompt": "Create a lifelike portrait of a man in his 30s with a strong jawline and dark, short hair with dramatic side lighting and high contrast in an editorial photo style.", "seed": 1, "output": "test_08_man_new.png", "steps": 4}
 {"prompt": "text in a bold simple font without serifs with a red background: 'Democracy will not come Today, this year Nor ever Through compromise and fear. I have as much right As the other fellow has To stand On my two feet.'", "seed": 343637, "output": "test_09_text_new.png", "steps": 4}
+{"prompt": "extreme close up of a hand, visible pores and hair, shallow depth of field", "seed": 42, "output": "test_blurp_text_new.png", "steps": 4}

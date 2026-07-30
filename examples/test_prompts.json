@@ -2,8 +2,8 @@
   "metadata": {
     "model": "microsoft/Mage-Flow-Turbo",
     "base_model": "MageFlow",
-    "generation_time_seconds": 226.7,
-    "created_at": "2026-07-29T20:47:14.874152",
+    "generation_time_seconds": 153.7,
+    "created_at": "2026-07-30T12:10:02.248789",
     "image_path": null,
     "image_paths": null,
     "image_strength": null,
@@ -12,14 +12,14 @@
   "phases": [
     {
       "name": "python_startup",
-      "elapsed": 3.129197284579277e-05,
-      "peak_rss_gib": 0.21722412109375,
+      "elapsed": 3.158301115036011e-05,
+      "peak_rss_gib": 0.2174530029296875,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "text_encoder_load",
-      "elapsed": 0.030845124972984195,
+      "elapsed": 0.02871933300048113,
       "peak_rss_gib": 0.242156982421875,
       "metadata": {
         "tensors": "713"
@@ -28,22 +28,22 @@
     },
     {
       "name": "tokenizer_load",
-      "elapsed": 1.7144492079969496,
-      "peak_rss_gib": 0.4452972412109375,
+      "elapsed": 1.874191083945334,
+      "peak_rss_gib": 0.44622802734375,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "pipeline_load",
-      "elapsed": 1.765675792004913,
-      "peak_rss_gib": 0.4452972412109375,
+      "elapsed": 1.9286101670004427,
+      "peak_rss_gib": 0.44622802734375,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "text_encode_1",
-      "elapsed": 1.410916417138651,
-      "peak_rss_gib": 7.945526123046875,
+      "elapsed": 1.3892447501420975,
+      "peak_rss_gib": 7.9469146728515625,
       "metadata": {
         "cache": "MISS"
       },
@@ -51,8 +51,8 @@
     },
     {
       "name": "text_encode_2",
-      "elapsed": 0.14703283412382007,
-      "peak_rss_gib": 7.94610595703125,
+      "elapsed": 0.10979870799928904,
+      "peak_rss_gib": 7.9474639892578125,
       "metadata": {
         "cache": "MISS"
       },
@@ -60,8 +60,8 @@
     },
     {
       "name": "text_encode_3",
-      "elapsed": 0.10100649995729327,
-      "peak_rss_gib": 7.9464111328125,
+      "elapsed": 0.10127649991773069,
+      "peak_rss_gib": 7.94781494140625,
       "metadata": {
         "cache": "MISS"
       },
@@ -69,8 +69,8 @@
     },
     {
       "name": "text_encode_4",
-      "elapsed": 0.09527733293361962,
-      "peak_rss_gib": 7.9466400146484375,
+      "elapsed": 0.09841133304871619,
+      "peak_rss_gib": 7.9480438232421875,
       "metadata": {
         "cache": "MISS"
       },
@@ -78,8 +78,8 @@
     },
     {
       "name": "text_encode_5",
-      "elapsed": 0.1102882910054177,
-      "peak_rss_gib": 7.94683837890625,
+      "elapsed": 0.0994143330026418,
+      "peak_rss_gib": 7.9481964111328125,
       "metadata": {
         "cache": "MISS"
       },
@@ -87,8 +87,8 @@
     },
     {
       "name": "text_encode_6",
-      "elapsed": 0.12615887494757771,
-      "peak_rss_gib": 7.947113037109375,
+      "elapsed": 0.100542375119403,
+      "peak_rss_gib": 7.948486328125,
       "metadata": {
         "cache": "MISS"
       },
@@ -96,8 +96,8 @@
     },
     {
       "name": "text_encode_7",
-      "elapsed": 0.12500291713513434,
-      "peak_rss_gib": 7.947540283203125,
+      "elapsed": 0.09472445794381201,
+      "peak_rss_gib": 7.94891357421875,
       "metadata": {
         "cache": "MISS"
       },
@@ -105,8 +105,8 @@
     },
     {
       "name": "text_encode_8",
-      "elapsed": 0.13127116695977747,
-      "peak_rss_gib": 7.9477996826171875,
+      "elapsed": 0.09801241592504084,
+      "peak_rss_gib": 7.9492034912109375,
       "metadata": {
         "cache": "MISS"
       },
@@ -114,8 +114,17 @@
     },
     {
       "name": "text_encode_9",
-      "elapsed": 0.13635475002229214,
-      "peak_rss_gib": 7.9481658935546875,
+      "elapsed": 0.10033729090355337,
+      "peak_rss_gib": 7.9496002197265625,
+      "metadata": {
+        "cache": "MISS"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "text_encode_10",
+      "elapsed": 0.09690762497484684,
+      "peak_rss_gib": 7.949737548828125,
       "metadata": {
         "cache": "MISS"
       },
@@ -123,22 +132,22 @@
     },
     {
       "name": "text_encoder_unload",
-      "elapsed": 0.07445704191923141,
-      "peak_rss_gib": 2.6173095703125,
+      "elapsed": 0.06070287502370775,
+      "peak_rss_gib": 2.201385498046875,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_load",
-      "elapsed": 1.3247238751500845,
-      "peak_rss_gib": 7.670293141156435,
+      "elapsed": 1.29892558301799,
+      "peak_rss_gib": 7.6703999526798725,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_load",
-      "elapsed": 0.06156541686505079,
-      "peak_rss_gib": 7.927435273304582,
+      "elapsed": 0.06033183285035193,
+      "peak_rss_gib": 7.927542084828019,
       "metadata": {
         "tensors": "728"
       },
@@ -146,43 +155,43 @@
     },
     {
       "name": "dit_step_1",
-      "elapsed": 3.2002545001450926,
-      "peak_rss_gib": 7.9342712592333555,
+      "elapsed": 3.1019546249881387,
+      "peak_rss_gib": 7.934378070756793,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_2",
-      "elapsed": 3.5579806668683887,
-      "peak_rss_gib": 7.9342712592333555,
+      "elapsed": 3.232056667096913,
+      "peak_rss_gib": 7.934378070756793,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_3",
-      "elapsed": 3.1877873330377042,
-      "peak_rss_gib": 7.9342712592333555,
+      "elapsed": 3.1717007500119507,
+      "peak_rss_gib": 7.934378070756793,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_4",
-      "elapsed": 3.593878790969029,
-      "peak_rss_gib": 7.9342712592333555,
+      "elapsed": 3.1632325840182602,
+      "peak_rss_gib": 7.934378070756793,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_decode",
-      "elapsed": 1.481214958941564,
-      "peak_rss_gib": 7.946051055565476,
+      "elapsed": 0.43820404214784503,
+      "peak_rss_gib": 7.946157867088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "generation_1",
-      "elapsed": 15.074251541867852,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 13.173967665992677,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {
         "prompt": "black and white pencil drawing on rough paper in the style of monet, a steampunk airship battling a mechanical dragon over a Victorian city, copper and brass details, dramatic storm lighting",
         "resolution": "1024x1024",
@@ -194,50 +203,50 @@
     },
     {
       "name": "save_1",
-      "elapsed": 0.046217457856982946,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 0.06073170807212591,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {},
       "saved_file": "output/test_01_airship_dragon_new.png"
     },
     {
       "name": "dit_step_1",
-      "elapsed": 4.226560707902536,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.180978458141908,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_2",
-      "elapsed": 3.737097291974351,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.2303565421607345,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_3",
-      "elapsed": 3.7304548751562834,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.209906291915104,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_4",
-      "elapsed": 3.912091915961355,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.18088333401829,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_decode",
-      "elapsed": 1.9243032920639962,
-      "peak_rss_gib": 7.946051055565476,
+      "elapsed": 0.3984772500116378,
+      "peak_rss_gib": 7.946157867088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "generation_2",
-      "elapsed": 17.64451824990101,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 13.24425912508741,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {
         "prompt": "Anime shonen style, an astronaut riding a cosmic wolf through a nebula, bioluminescent fur, star trails, ethereal purple and blue lighting",
         "resolution": "1024x1024",
@@ -249,50 +258,50 @@
     },
     {
       "name": "save_2",
-      "elapsed": 0.051321249920874834,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 0.04776820819824934,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {},
       "saved_file": "output/test_02_cosmic_wolf_new.png"
     },
     {
       "name": "dit_step_1",
-      "elapsed": 4.272224874934182,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.206173582933843,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_2",
-      "elapsed": 4.44300316600129,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.2028957919683307,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_3",
-      "elapsed": 4.776941542048007,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.2149397919420153,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_4",
-      "elapsed": 4.842377374880016,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.2039322908967733,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_decode",
-      "elapsed": 0.712844709167257,
-      "peak_rss_gib": 7.946051055565476,
+      "elapsed": 0.39855687506496906,
+      "peak_rss_gib": 7.946157867088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "generation_3",
-      "elapsed": 19.112380374921486,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 13.276835999917239,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {
         "prompt": "90s selfie grunge vice a portrait of a punk girl sitting on an old sofa",
         "resolution": "1024x1024",
@@ -304,50 +313,50 @@
     },
     {
       "name": "save_3",
-      "elapsed": 0.08983504096977413,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 0.045792584074661136,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {},
       "saved_file": "output/test_03_girl_new.png"
     },
     {
       "name": "dit_step_1",
-      "elapsed": 7.136193041922525,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.209511249791831,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_2",
-      "elapsed": 6.007219874998555,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.175351790850982,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_3",
-      "elapsed": 6.218213666928932,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.196273625129834,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_4",
-      "elapsed": 6.989676957949996,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.2159479591064155,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_decode",
-      "elapsed": 1.1958237499929965,
-      "peak_rss_gib": 7.946051055565476,
+      "elapsed": 0.40710983402095735,
+      "peak_rss_gib": 7.946157867088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "generation_4",
-      "elapsed": 27.61864195787348,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 13.260205874918029,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {
         "prompt": "A school of cybernetic koi fish swimming through glowing circuit boards, neon green and electric blue, glitch art aesthetic, ultra sharp focus",
         "resolution": "1024x1024",
@@ -359,50 +368,50 @@
     },
     {
       "name": "save_4",
-      "elapsed": 0.09904883382841945,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 0.06300604087300599,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {},
       "saved_file": "output/test_04_circuit_koi_new.png"
     },
     {
       "name": "dit_step_1",
-      "elapsed": 6.801225916016847,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.1721041668206453,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_2",
-      "elapsed": 6.588109750067815,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.183119249995798,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_3",
-      "elapsed": 6.299340165918693,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.156228000065312,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_4",
-      "elapsed": 7.608938334044069,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.2072974999900907,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_decode",
-      "elapsed": 0.9362963330931962,
-      "peak_rss_gib": 7.946051055565476,
+      "elapsed": 0.39670137502253056,
+      "peak_rss_gib": 7.946157867088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "generation_5",
-      "elapsed": 28.313371958909556,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 13.160060582915321,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {
         "prompt": "A library that exists inside a giant tree, floating books, magical glow, fantasy realism",
         "resolution": "1024x1024",
@@ -414,50 +423,50 @@
     },
     {
       "name": "save_5",
-      "elapsed": 0.07761129084974527,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 0.05172912497073412,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {},
       "saved_file": "output/test_05_tree_library_new.png"
     },
     {
       "name": "dit_step_1",
-      "elapsed": 8.80990208312869,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.2295567088294774,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_2",
-      "elapsed": 7.475667333928868,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.107250083005056,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_3",
-      "elapsed": 7.417861166875809,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.2221570420078933,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_4",
-      "elapsed": 7.777477165916935,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.238583792001009,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_decode",
-      "elapsed": 1.32725645811297,
-      "peak_rss_gib": 7.946051055565476,
+      "elapsed": 0.5684710000641644,
+      "peak_rss_gib": 7.946157867088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "generation_6",
-      "elapsed": 32.90688108303584,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 13.421247750055045,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {
         "prompt": "A retro-futuristic diner on Mars, neon signs, red planet landscape visible through windows, 1950s sci-fi movie poster style, the name of the diner is 'mage'",
         "resolution": "1024x1024",
@@ -469,50 +478,50 @@
     },
     {
       "name": "save_6",
-      "elapsed": 0.10495083406567574,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 0.06140366708859801,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {},
       "saved_file": "output/test_06_mars_diner_new.png"
     },
     {
       "name": "dit_step_1",
-      "elapsed": 8.323433167068288,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 4.817539457930252,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_2",
-      "elapsed": 6.650034290971234,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.191968332976103,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_3",
-      "elapsed": 7.916949459118769,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.2658277079463005,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_4",
-      "elapsed": 6.082444416126236,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.234799916855991,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_decode",
-      "elapsed": 0.9972425829619169,
-      "peak_rss_gib": 7.946051055565476,
+      "elapsed": 0.6283834169153124,
+      "peak_rss_gib": 7.946157867088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "generation_7",
-      "elapsed": 30.126550124958158,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 15.195514833088964,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {
         "prompt": "A close-up portrait of an elderly African man with deep wrinkles, wearing a traditional hat, soft natural lighting, ultra realistic.",
         "resolution": "1024x1024",
@@ -524,50 +533,50 @@
     },
     {
       "name": "save_7",
-      "elapsed": 0.07964570797048509,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 0.05528708407655358,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {},
       "saved_file": "output/test_07_old_man_new.png"
     },
     {
       "name": "dit_step_1",
-      "elapsed": 5.3993022500071675,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.431362583069131,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_2",
-      "elapsed": 5.797677000053227,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.4118148328270763,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_3",
-      "elapsed": 5.581176958978176,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.5394069170579314,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_4",
-      "elapsed": 6.572448999853805,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 3.6393970421049744,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_decode",
-      "elapsed": 1.1992478331085294,
-      "peak_rss_gib": 7.946051055565476,
+      "elapsed": 0.5666545410640538,
+      "peak_rss_gib": 7.946157867088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "generation_8",
-      "elapsed": 24.614398415898904,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 14.652796125039458,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {
         "prompt": "Create a lifelike portrait of a man in his 30s with a strong jawline and dark, short hair with dramatic side lighting and high contrast in an editorial photo style.",
         "resolution": "1024x1024",
@@ -579,50 +588,50 @@
     },
     {
       "name": "save_8",
-      "elapsed": 0.0995684580411762,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 0.06953149987384677,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {},
       "saved_file": "output/test_08_man_new.png"
     },
     {
       "name": "dit_step_1",
-      "elapsed": 6.26272387499921,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 4.099762083031237,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_2",
-      "elapsed": 5.912760375067592,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 4.153446167008951,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_3",
-      "elapsed": 5.548173374962062,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 4.2645875830203295,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "dit_step_4",
-      "elapsed": 5.233411916997284,
-      "peak_rss_gib": 7.934332305565476,
+      "elapsed": 4.5753134589176625,
+      "peak_rss_gib": 7.934439117088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "vae_decode",
-      "elapsed": 1.1220689578913152,
-      "peak_rss_gib": 7.946051055565476,
+      "elapsed": 1.127135958056897,
+      "peak_rss_gib": 7.946157867088914,
       "metadata": {},
       "saved_file": null
     },
     {
       "name": "generation_9",
-      "elapsed": 24.16934737493284,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 18.28452954092063,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {
         "prompt": "text in a bold simple font without serifs with a red background: 'Democracy will not come Today, this year Nor ever Through compromise and fear. I have as much right As the other fellow has To stand On my two feet.'",
         "resolution": "1024x1024",
@@ -634,25 +643,80 @@
     },
     {
       "name": "save_9",
-      "elapsed": 0.08526583295315504,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 0.07670475007034838,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {},
       "saved_file": "output/test_09_text_new.png"
     },
     {
+      "name": "dit_step_1",
+      "elapsed": 4.416422874899581,
+      "peak_rss_gib": 7.934439117088914,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "dit_step_2",
+      "elapsed": 4.420145625015721,
+      "peak_rss_gib": 7.934439117088914,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "dit_step_3",
+      "elapsed": 4.800001708092168,
+      "peak_rss_gib": 7.934439117088914,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "dit_step_4",
+      "elapsed": 4.648385375039652,
+      "peak_rss_gib": 7.934439117088914,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_decode",
+      "elapsed": 0.7860464160330594,
+      "peak_rss_gib": 7.946157867088914,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "generation_10",
+      "elapsed": 19.132002291968092,
+      "peak_rss_gib": 7.930532859638333,
+      "metadata": {
+        "prompt": "extreme close up of a hand, visible pores and hair, shallow depth of field",
+        "resolution": "1024x1024",
+        "steps": "4",
+        "quantize": "None",
+        "seed": "42"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "save_10",
+      "elapsed": 0.05826645903289318,
+      "peak_rss_gib": 7.930532859638333,
+      "metadata": {},
+      "saved_file": "output/test_blurp_text_new.png"
+    },
+    {
       "name": "total_wall_clock",
-      "elapsed": 226.67284466698766,
-      "peak_rss_gib": 7.930426048114896,
+      "elapsed": 153.71393229207024,
+      "peak_rss_gib": 7.930532859638333,
       "metadata": {},
       "saved_file": null
     }
   ],
-  "total_wall_clock": 226.67284466698766,
+  "total_wall_clock": 153.71393229207024,
   "overview": [
     {
       "index": 1,
-      "time": 15.074251541867852,
-      "peak_rss_gib": 7.930426048114896,
+      "time": 13.173967665992677,
+      "peak_rss_gib": 7.930532859638333,
       "resolution": "1024x1024",
       "steps": 4,
       "seed": 42,
@@ -660,8 +724,8 @@
     },
     {
       "index": 2,
-      "time": 17.64451824990101,
-      "peak_rss_gib": 7.930426048114896,
+      "time": 13.24425912508741,
+      "peak_rss_gib": 7.930532859638333,
       "resolution": "1024x1024",
       "steps": 4,
       "seed": 43,
@@ -669,8 +733,8 @@
     },
     {
       "index": 3,
-      "time": 19.112380374921486,
-      "peak_rss_gib": 7.930426048114896,
+      "time": 13.276835999917239,
+      "peak_rss_gib": 7.930532859638333,
       "resolution": "1024x1024",
       "steps": 4,
       "seed": 100,
@@ -678,8 +742,8 @@
     },
     {
       "index": 4,
-      "time": 27.61864195787348,
-      "peak_rss_gib": 7.930426048114896,
+      "time": 13.260205874918029,
+      "peak_rss_gib": 7.930532859638333,
       "resolution": "1024x1024",
       "steps": 4,
       "seed": 45,
@@ -687,8 +751,8 @@
     },
     {
       "index": 5,
-      "time": 28.313371958909556,
-      "peak_rss_gib": 7.930426048114896,
+      "time": 13.160060582915321,
+      "peak_rss_gib": 7.930532859638333,
       "resolution": "1024x1024",
       "steps": 4,
       "seed": 2893,
@@ -696,8 +760,8 @@
     },
     {
       "index": 6,
-      "time": 32.90688108303584,
-      "peak_rss_gib": 7.930426048114896,
+      "time": 13.421247750055045,
+      "peak_rss_gib": 7.930532859638333,
       "resolution": "1024x1024",
       "steps": 4,
       "seed": 47,
@@ -705,8 +769,8 @@
     },
     {
       "index": 7,
-      "time": 30.126550124958158,
-      "peak_rss_gib": 7.930426048114896,
+      "time": 15.195514833088964,
+      "peak_rss_gib": 7.930532859638333,
       "resolution": "1024x1024",
       "steps": 4,
       "seed": 42,
@@ -714,8 +778,8 @@
     },
     {
       "index": 8,
-      "time": 24.614398415898904,
-      "peak_rss_gib": 7.930426048114896,
+      "time": 14.652796125039458,
+      "peak_rss_gib": 7.930532859638333,
       "resolution": "1024x1024",
       "steps": 4,
       "seed": 1,
@@ -723,20 +787,29 @@
     },
     {
       "index": 9,
-      "time": 24.16934737493284,
-      "peak_rss_gib": 7.930426048114896,
+      "time": 18.28452954092063,
+      "peak_rss_gib": 7.930532859638333,
       "resolution": "1024x1024",
       "steps": 4,
       "seed": 343637,
       "file": "output/test_09_text_new.png"
+    },
+    {
+      "index": 10,
+      "time": 19.132002291968092,
+      "peak_rss_gib": 7.930532859638333,
+      "resolution": "1024x1024",
+      "steps": 4,
+      "seed": 42,
+      "file": "output/test_blurp_text_new.png"
     }
   ],
   "summary": {
-    "total_time": 226.67284466698766,
-    "peak_ram": 7.9481658935546875,
-    "prompts_count": 9,
-    "overhead": 3.217603041557595,
-    "text_encode_time": 3.8749005431309342
+    "total_time": 153.71393229207024,
+    "peak_ram": 7.949737548828125,
+    "prompts_count": 10,
+    "overhead": 3.175163089297712,
+    "text_encode_time": 3.737349412869662
   },
   "log": [
     "======================================================================",
@@ -746,6 +819,6 @@
     "  Current working directory: /Users/tilman/projects/Mage-Flow-mlx",
     "  Python executable: /Users/tilman/projects/Mage-Flow-mlx/.venv/bin/python",
     "  Imported MageFlowPipeline successfully",
-    "  Loaded 9 prompts from test_prompts.jsonl"
+    "  Loaded 10 prompts from test_prompts.jsonl"
   ]
 }

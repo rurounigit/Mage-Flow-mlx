@@ -1,0 +1,165 @@
+{
+  "metadata": {
+    "model": "microsoft/Mage-Flow-Turbo",
+    "base_model": "MageFlow",
+    "generation_time_seconds": 18.1,
+    "created_at": "2026-07-30T12:08:37.730158",
+    "image_path": null,
+    "image_paths": null,
+    "image_strength": null,
+    "peak_memory_gib": 7.94
+  },
+  "phases": [
+    {
+      "name": "python_startup",
+      "elapsed": 2.9999995604157448e-05,
+      "peak_rss_gib": 0.2171478271484375,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "text_encoder_load",
+      "elapsed": 0.010019124951213598,
+      "peak_rss_gib": 0.22900390625,
+      "metadata": {
+        "tensors": "713"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "tokenizer_load",
+      "elapsed": 2.0234917500056326,
+      "peak_rss_gib": 0.442169189453125,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "pipeline_load",
+      "elapsed": 2.0568552499171346,
+      "peak_rss_gib": 0.442169189453125,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "text_encode",
+      "elapsed": 1.3943445000331849,
+      "peak_rss_gib": 7.94354248046875,
+      "metadata": {
+        "cache": "MISS"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "text_encoder_unload",
+      "elapsed": 0.06260966579429805,
+      "peak_rss_gib": 0.7293548583984375,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "dit_load",
+      "elapsed": 1.3072936250828207,
+      "peak_rss_gib": 7.66879777982831,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_load",
+      "elapsed": 0.05996074993163347,
+      "peak_rss_gib": 7.925939911976457,
+      "metadata": {
+        "tensors": "728"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "dit_step_1",
+      "elapsed": 3.0846925841178745,
+      "peak_rss_gib": 7.9327758979052305,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "dit_step_2",
+      "elapsed": 3.2122694158460945,
+      "peak_rss_gib": 7.9327758979052305,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "dit_step_3",
+      "elapsed": 3.1804176250007004,
+      "peak_rss_gib": 7.9327758979052305,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "dit_step_4",
+      "elapsed": 3.172621625009924,
+      "peak_rss_gib": 7.9327758979052305,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_decode",
+      "elapsed": 0.42178416694514453,
+      "peak_rss_gib": 7.944555694237351,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "generation",
+      "elapsed": 15.990821500075981,
+      "peak_rss_gib": 7.928930686786771,
+      "metadata": {
+        "prompt": "An unbranded futuristic running shoe made from white technical mesh with a vivid orange sole, floating above a pale gray studio surface, dramatic softbox lighting, premium product photography, photorealistic.",
+        "resolution": "1024x1024",
+        "steps": "4",
+        "quantize": "None",
+        "seed": "42"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "save_png",
+      "elapsed": 0.06591204204596579,
+      "peak_rss_gib": 7.928930686786771,
+      "metadata": {},
+      "saved_file": "output/test_10_shoe.png"
+    },
+    {
+      "name": "total_wall_clock",
+      "elapsed": 18.148737833136693,
+      "peak_rss_gib": 7.928930686786771,
+      "metadata": {},
+      "saved_file": null
+    }
+  ],
+  "total_wall_clock": 18.148737833136693,
+  "overview": [
+    {
+      "index": 1,
+      "time": 15.990821500075981,
+      "peak_rss_gib": 7.944555694237351,
+      "resolution": "1024x1024",
+      "steps": 4,
+      "seed": 42,
+      "file": "output/test_10_shoe.png"
+    }
+  ],
+  "summary": {
+    "total_time": 18.148737833136693,
+    "peak_ram": 7.944555694237351,
+    "prompts_count": 1,
+    "overhead": 2.1579163330607116
+  },
+  "log": [
+    "======================================================================",
+    "  Mage-Flow MLX",
+    "======================================================================",
+    "  Importing Mage-Flow MLX pipeline from models/microsoft_Mage-Flow-Turbo...",
+    "  Current working directory: /Users/tilman/projects/Mage-Flow-mlx",
+    "  Python executable: /Users/tilman/projects/Mage-Flow-mlx/.venv/bin/python",
+    "  Imported MageFlowPipeline successfully"
+  ]
+}

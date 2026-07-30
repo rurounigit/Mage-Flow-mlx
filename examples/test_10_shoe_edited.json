@@ -1,0 +1,131 @@
+{
+  "metadata": {
+    "model": "microsoft/Mage-Flow-Edit-Turbo",
+    "base_model": "MageFlow",
+    "generation_time_seconds": 20.9,
+    "created_at": "2026-07-30T12:09:16.395985",
+    "image_path": "test_10_shoe.png",
+    "image_paths": null,
+    "image_strength": null,
+    "peak_memory_gib": 8.71
+  },
+  "phases": [
+    {
+      "name": "python_startup",
+      "elapsed": 3.395811654627323e-05,
+      "peak_rss_gib": 0.217071533203125,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "pipeline_load",
+      "elapsed": 3.296458541881293,
+      "peak_rss_gib": 8.712127685546875,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "dit_load",
+      "elapsed": 1.4825794999487698,
+      "peak_rss_gib": 7.924916170537472,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_load",
+      "elapsed": 1.125037670135498e-06,
+      "peak_rss_gib": 7.924916170537472,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_1",
+      "elapsed": 3.631651540985331,
+      "peak_rss_gib": 7.865287765860558,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_2",
+      "elapsed": 3.623812082922086,
+      "peak_rss_gib": 7.865287765860558,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_3",
+      "elapsed": 3.5794138328637928,
+      "peak_rss_gib": 7.865287765860558,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit_step_4",
+      "elapsed": 3.6875737500377,
+      "peak_rss_gib": 7.865287765860558,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "vae_decode",
+      "elapsed": 0.34814808308146894,
+      "peak_rss_gib": 7.863365115597844,
+      "metadata": {},
+      "saved_file": null
+    },
+    {
+      "name": "edit",
+      "elapsed": 17.062540292041376,
+      "peak_rss_gib": 7.855552615597844,
+      "metadata": {
+        "prompt": "change the shoe to deep burgundy polished leather with a translucent smoke-gray sole and subtle chrome details. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.",
+        "resolution": "1024x1024",
+        "steps": "4",
+        "quantize": "None",
+        "seed": "42"
+      },
+      "saved_file": null
+    },
+    {
+      "name": "save_png",
+      "elapsed": 0.07429512497037649,
+      "peak_rss_gib": 7.855552615597844,
+      "metadata": {},
+      "saved_file": "output/test_10_shoe_edited.png"
+    },
+    {
+      "name": "total_wall_clock",
+      "elapsed": 20.88767662504688,
+      "peak_rss_gib": 5.839111328125,
+      "metadata": {},
+      "saved_file": null
+    }
+  ],
+  "total_wall_clock": 20.88767662504688,
+  "overview": [
+    {
+      "index": 1,
+      "time": 17.062540292041376,
+      "peak_rss_gib": 7.865287765860558,
+      "resolution": "1024x1024",
+      "steps": 4,
+      "seed": 42,
+      "file": "output/test_10_shoe_edited.png"
+    }
+  ],
+  "summary": {
+    "total_time": 20.88767662504688,
+    "peak_ram": 8.712127685546875,
+    "prompts_count": 1,
+    "overhead": 3.825136333005503
+  },
+  "log": [
+    "======================================================================",
+    "  Mage-Flow MLX",
+    "======================================================================",
+    "  Importing Mage-Flow MLX pipeline from models/microsoft_Mage-Flow-Edit-Turbo...",
+    "  Current working directory: /Users/tilman/projects/Mage-Flow-mlx",
+    "  Python executable: /Users/tilman/projects/Mage-Flow-mlx/.venv/bin/python",
+    "  Imported MageFlowPipeline successfully"
+  ]
+}
