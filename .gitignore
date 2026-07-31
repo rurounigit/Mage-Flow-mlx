@@ -15,4 +15,7 @@ mage_mlx/mflux_src/
 !mage_mlx/mflux_src/mflux/models/mage_flow/mage_flow_initializer.py
 !mage_mlx/mflux_src/mflux/models/mage_flow/model/mage_flow_text_encoder/text_encoder.py
 !mage_mlx/mflux_src/mflux/models/mage_flow/variants/edit/mage_flow_edit.py
+!mage_mlx/mflux_src/mflux/models/mage_flow/weights/mage_flow_weight_definition.py
+!mage_mlx/mflux_src/mflux/models/common/resolution/path_resolution.py
+
 
