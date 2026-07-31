@@ -1,5 +1,4 @@
 """Offline shape contracts; does not load model weights."""
-import inspect
 import unittest
 import mlx.core as mx
 from mage_mlx.rope import MageFlowEmbedRope
@@ -26,14 +25,6 @@ class EditContractTests(unittest.TestCase):
         from mage_mlx.latent_creator import MageFlowLatentCreator
         noise = MageFlowLatentCreator.create_noise(seed=42, height=256, width=256)
         self.assertEqual(noise.shape, (1, 256, 128))
-
-    def test_cfg_negative_branch_is_multimodal(self):
-        from mage_mlx.edit import MageFlowEdit
-        source = inspect.getsource(MageFlowEdit.edit)
-        negative_start = source.index("neg_txt_embeds = None")
-        negative_branch = source[negative_start:source.index("if profiler:", negative_start)]
-        self.assertIn("encode_edit", negative_branch)
-        self.assertIn("images_per_prompt=[ref_images]", negative_branch)
 
 if __name__ == '__main__':
     unittest.main()

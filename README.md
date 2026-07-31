@@ -374,11 +374,13 @@ The edit worker mirrors the txt2img worker but with image validation, reference 
 
 ### Renormalization
 
-The `--renormalization` flag scales velocity predictions to match the magnitude of the input latents, which can stabilize the flow matching process:
+The `--renormalization` flag rescales the CFG-guided velocity prediction to match the L2 norm of the *unconditional* (non-guided) velocity prediction. This preserves the direction change introduced by classifier-free guidance while preventing the magnitude amplification that high guidance scales can cause, which can destabilize the flow matching trajectory:
 
 ```bash
 python generate.py --prompt "..." --image target.png --renormalization
 ```
+
+**Note:** Renormalization only has an effect when `--guidance` is greater than 1.0. With the default guidance of 1.0 (used by the `Mage-Flow-Edit-Turbo` checkpoint), CFG is disabled and the guided velocity is identical to the conditional velocity, so the norm ratio is 1.0 and renormalization is a no-op.
 
 ## Profiling & Metadata
 
@@ -468,7 +470,6 @@ mage-flow-mlx/
 │   ├── scheduler.py        # FlowMatchEulerDiscreteScheduler
 │   ├── rope.py             # 2D multi-scale RoPE (MageFlowEmbedRope)
 │   ├── timestep.py         # Sinusoidal timestep embedding (qwen_proj style)
-│   ├── edit.py             # MageFlowEdit (image editing pipeline)
 │   ├── latent_creator.py   # Gaussian-Shading watermarked noise
 │   ├── prompt_processor.py # Shared prompt templates & hidden-state processing
 │   ├── processor.py        # Qwen3-VL multi-modal tokenizer/image processor
