@@ -192,7 +192,15 @@
   "active": "ffbea2b14361b3ad",
   "lastOpenFiles": [
     "models/Comfy-Org_Mage-Flow-Turbo",
-    "models/mage_flow_mlx",
-    "uv.lock"
+    "mage_mlx/__pycache__/loader.cpython-314.pyc",
+    "mage_mlx/__pycache__/timestep.cpython-314.pyc",
+    "mage_mlx/__pycache__/rope.cpython-314.pyc",
+    "mage_mlx/__pycache__/dit.cpython-314.pyc",
+    "mage_mlx/__pycache__/pipeline.cpython-314.pyc",
+    "mage_mlx/__pycache__/__init__.cpython-314.pyc",
+    "models/Comfy-Org_Mage-Flow-Turbo/embedding_cache/bdbf74b223e90df388f1058c9e8616f8824dc0ab53396ac6398bfc0c7c122a10.json",
+    "models/Comfy-Org_Mage-Flow-Turbo/embedding_cache/bdbf74b223e90df388f1058c9e8616f8824dc0ab53396ac6398bfc0c7c122a10.npy",
+    "models/Comfy-Org_Mage-Flow-Turbo/embedding_cache",
+    "models/shared/mage_flow_qwen3vl/text_encoder.safetensors"
   ]
 }

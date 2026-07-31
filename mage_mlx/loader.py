@@ -173,17 +173,27 @@ MAGE_FLOW_MODEL_FILES = {
 # Shared files that are always needed alongside the DiT weights, regardless
 # of which model variant is selected.  These are downloaded with exact paths
 # (no wildcards) so we never pull the entire 53 GB repo.
+# Note: The Comfy-Org/Mage-Flow repo contains only .safetensors files — no
+# config.json or tokenizer files.  The tokenizer is loaded separately from
+# Qwen/Qwen3-VL-8B-Instruct by the pipeline.
 MAGE_FLOW_SHARED_FILES = [
     "vae/mage_flow_vae_bf16.safetensors",
     "text_encoders/qwen3vl_4b_bf16.safetensors",
-    "diffusion_models/config.json",
-    "vae/config.json",
-    "text_encoders/config.json",
-    "text_encoders/tokenizer.json",
-    "text_encoders/tokenizer_config.json",
-    "text_encoders/vocab.json",
-    "text_encoders/merges.txt",
 ]
+
+# Default DiT configuration for Mage-Flow (turbo and edit-turbo variants).
+# The Comfy-Org/Mage-Flow repo does not ship a config.json, so we generate
+# this locally from the known architecture parameters.
+MAGE_FLOW_DIT_CONFIG = {
+    "in_channels": 128,
+    "out_channels": 128,
+    "context_in_dim": 2560,
+    "hidden_size": 3072,
+    "num_heads": 24,
+    "depth": 12,
+    "axes_dim": [16, 56, 56],
+    "patch_size": 1,
+}
 
 def _parse_hf_file_path(model_path_or_repo: str) -> tuple[str, str, str] | None:
     """Parse a full HuggingFace file path into (repo_id, file_path, output_dir_name).
@@ -399,15 +409,19 @@ def ensure_mlx_model(
                 key_mapper_fn=map_dit_key,
             )
 
-        # DiT config — try the new flat structure first, then the old diffusers layout
+        # DiT config — try the new flat structure first, then the old diffusers layout.
+        # The Comfy-Org/Mage-Flow repo does not ship a config.json, so fall back
+        # to the known architecture parameters.
         dit_config_src = os.path.join(repo_dir, "diffusion_models", "config.json")
         if not os.path.exists(dit_config_src):
             dit_config_src = os.path.join(repo_dir, "transformer", "config.json")
         if os.path.exists(dit_config_src):
             with open(dit_config_src) as f:
                 dit_config = json.load(f)
-            with open(os.path.join(output_dir, "transformer_config.json"), "w") as f:
-                json.dump(dit_config, f, indent=2)
+        else:
+            dit_config = dict(MAGE_FLOW_DIT_CONFIG)
+        with open(os.path.join(output_dir, "transformer_config.json"), "w") as f:
+            json.dump(dit_config, f, indent=2)
 
         with open(os.path.join(output_dir, "precision_config.json"), "w") as f:
             json.dump(
