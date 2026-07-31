@@ -642,6 +642,20 @@ def _ansi_rjust(s: str, width: int, color: str = "") -> str:
     return result
 
 
+def _ansi_ljust(s: str, width: int, color: str = "") -> str:
+    """Left-justify visible text to *width*, then optionally wrap in ANSI color.
+
+    Like :func:`_ansi_rjust` but pads on the right instead of the left.
+    Useful for columns where content should start at a consistent position
+    (e.g. thermal state strings of varying length).
+    """
+    pad = max(0, width - _visible_len(s))
+    result = s + ' ' * pad
+    if color:
+        result = f"{color}{result}{_C.RESET}"
+    return result
+
+
 def _fmt_time(s: float) -> str:
     """Format seconds with one decimal place."""
     return f"{s:.1f}s"
@@ -1129,7 +1143,7 @@ class LiveReport:
                 file_str = f"{_C.GREEN}{p.saved_file}{_C.RESET}" if p.saved_file else f"{_C.GRAY}—{_C.RESET}"
                 print(
                     f"  {p.index:>{idx_width}}  {_ansi_rjust(t_str, time_width)}   {_ansi_rjust(r_str, ram_width)}   "
-                    f"{p.resolution:>{res_width}}   {p.steps:>{steps_width}}   {seed_str:>{seed_width}}   {_ansi_rjust(th_str, th_width)}   {file_str}"
+                    f"{p.resolution:>{res_width}}   {p.steps:>{steps_width}}   {seed_str:>{seed_width}}   {_ansi_ljust(th_str, th_width)}   {file_str}"
                 )
 
             sum_gen = sum(p.generation_time for p in self.prompts if p.generation_time is not None)
@@ -1159,7 +1173,7 @@ class LiveReport:
                         te_ram_str = f"{_C.GRAY}—{_C.RESET}"
                     print(
                         f"  {'—':>{idx_width}}  {_ansi_rjust(te_str, time_width)}   {_ansi_rjust(te_ram_str, ram_width)}   "
-                        f"{'—':>{res_width}}   {'—':>{steps_width}}   {'—':>{seed_width}}   {_ansi_rjust('—', th_width)}   {_C.GRAY}text encode / decode{_C.RESET}"
+                        f"{'—':>{res_width}}   {'—':>{steps_width}}   {'—':>{seed_width}}   {_ansi_ljust('—', th_width)}   {_C.GRAY}text encode / decode{_C.RESET}"
                     )
 
             overhead = total_time - sum_gen
@@ -1170,7 +1184,7 @@ class LiveReport:
                 oh_str = _colorize_total(overhead)
                 print(
                     f"  {'—':>{idx_width}}  {_ansi_rjust(oh_str, time_width)}   {_ansi_rjust('—', ram_width)}   "
-                    f"{'—':>{res_width}}   {'—':>{steps_width}}   {'—':>{seed_width}}   {_ansi_rjust('—', th_width)}   {_C.GRAY}overhead (load + encode + decode){_C.RESET}"
+                    f"{'—':>{res_width}}   {'—':>{steps_width}}   {'—':>{seed_width}}   {_ansi_ljust('—', th_width)}   {_C.GRAY}overhead (load + encode + decode){_C.RESET}"
                 )
             print()
 
