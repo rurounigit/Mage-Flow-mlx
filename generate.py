@@ -385,7 +385,7 @@ def main():
                 generation_time=None,
                 peak_memory_gib=None,
             )
-        _run_edit(args, prof, report)
+        edit_thermal_state = _run_edit(args, prof, report)
 
         prof.stop("total_wall_clock")
         # For edit: image_path = target image, image_paths = reference images
@@ -419,6 +419,7 @@ def main():
                     "vae_decode",
                 ) or prof.get_peak_rss_gib(),
                 saved_file=args.output,
+                thermal_state=edit_thermal_state,
             )
             report.print_summary(
                 total_time=prof.get_elapsed("total_wall_clock") or 0.0,
@@ -445,6 +446,7 @@ def main():
                     "steps": args.steps,
                     "seed": args.seed,
                     "file": args.output,
+                    "thermal_state": edit_thermal_state,
                 }
             ]
             total_time = prof.get_elapsed("total_wall_clock") or 0.0
@@ -508,9 +510,17 @@ def main():
     te_path = resolve_text_encoder_path(args.model)
 
     # --- Phase: Text encoding (Qwen) ---
+    # Print thermal state at the start of each prompt (verbose mode only;
+    # always captured for metadata output)
+    thermal_state = None
+    if report:
+        thermal_state = Profiler.get_thermal_state()
+        report.print_thermal_state(thermal_state)
+
     # Print prompt header BEFORE encoding starts (so it appears right before metadata)
     if report and report.verbose:
         report.prompt_header(1, 1)
+
         report.add_metadata("generation", "prompt", args.prompt)
         report.add_metadata("generation", "resolution", f"{args.width}x{args.height}")
         report.add_metadata("generation", "steps", str(args.steps))
@@ -662,6 +672,7 @@ def main():
                 "vae_decode",
             ) or prof.get_peak_rss_gib(),
             saved_file=args.output,
+            thermal_state=thermal_state,
         )
 
     # --- Report + Metadata ---
@@ -698,6 +709,7 @@ def main():
                 "steps": args.steps,
                 "seed": args.seed,
                 "file": args.output,
+                "thermal_state": thermal_state,
             }
         ]
         total_time = prof.get_elapsed("total_wall_clock") or 0.0
@@ -778,6 +790,13 @@ def _run_edit(args, prof, report=None):
             grey_separator=True,
         )
 
+    # Print thermal state at the start of each prompt (verbose mode only;
+    # always captured for metadata output)
+    thermal_state = None
+    if report:
+        thermal_state = Profiler.get_thermal_state()
+        report.print_thermal_state(thermal_state)
+
     # Print prompt header (magenta bold) before edit metadata
     if report and report.verbose:
         report.prompt_header(1, 1)
@@ -854,6 +873,8 @@ def _run_edit(args, prof, report=None):
             prof.get_phase_rss("save_png"),
             saved_file=args.output,
         )
+
+    return thermal_state
 
 
 def _benchmark_cleanup(args, prof):

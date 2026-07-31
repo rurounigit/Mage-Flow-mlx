@@ -38,6 +38,7 @@ class PhaseRecord:
     peak_rss_gib: Optional[float] = None
     metadata: dict[str, str] = field(default_factory=dict)
     saved_file: Optional[str] = None
+    thermal_state: Optional[dict] = None
 
 
 @dataclass
@@ -248,6 +249,47 @@ class Profiler:
                 return dict(rec.metadata)
         return {}
 
+    @staticmethod
+    def get_thermal_state() -> dict:
+        """Get current thermal state from macOS (no sudo required).
+
+        Reads CPU and GPU thermal levels from sysctl. Returns a dict
+        with ``cpu_thermal_level``, ``gpu_thermal_level``, and
+        ``thermal_throttling`` (a human-readable label).
+
+        On non-macOS or when sysctl keys are unavailable, levels are
+        None and the label is "unknown".
+        """
+        from mage_mlx.thermal import get_thermal_state as _get_thermal_state
+        return _get_thermal_state()
+
+    @property
+    def thermal_state(self) -> Optional[dict]:
+        """Return the most recent thermal state from phase records.
+
+        Scans records in reverse order and returns the first non-None
+        ``thermal_state`` found.  Returns ``None`` if no phase has
+        recorded a thermal state.
+        """
+        for rec in reversed(self._records):
+            if rec.thermal_state is not None:
+                return rec.thermal_state
+        return None
+
+    def set_thermal_state(self, name: str, state: dict) -> None:
+        """Attach a thermal state dict to a named phase record.
+
+        Args:
+            name: Phase name to attach the thermal state to.
+            state: Thermal state dict from :meth:`get_thermal_state`.
+        """
+        if not self.enabled:
+            return
+        for rec in self._records:
+            if rec.name == name:
+                rec.thermal_state = state
+                return
+
     def total_elapsed(self) -> float:
         """Return total elapsed time across all recorded phases."""
         return sum(r.elapsed for r in self._records)
@@ -280,6 +322,7 @@ class Profiler:
                     "peak_rss_gib": rec.peak_rss_gib,
                     "metadata": dict(rec.metadata),
                     "saved_file": rec.saved_file,
+                    "thermal_state": rec.thermal_state,
                 }
                 for rec in self._records
             ],
@@ -358,6 +401,14 @@ class Profiler:
                 metadata_str = ", ".join(parts)
             else:
                 metadata_str = ""
+            # Append thermal state to metadata if present
+            if rec.thermal_state:
+                from mage_mlx.thermal import format_thermal_state
+                th = format_thermal_state(rec.thermal_state)
+                if metadata_str:
+                    metadata_str = f"{metadata_str}, thermal={th}"
+                else:
+                    metadata_str = f"thermal={th}"
             if has_saved_files:
                 lines.append(f"| {rec.name} | {rec.elapsed:.1f} | {rss_str} | {saved_str} | {metadata_str} |")
             else:
@@ -395,8 +446,8 @@ class Profiler:
         if overview:
             lines.append("## Overview")
             lines.append("")
-            lines.append("|_ | Time (s) | Peak RSS (GiB) | Resolution | Steps | Seed | File |")
-            lines.append("|---|----------|----------------|------------|-------|------|------|")
+            lines.append("|_ | Time (s) | Peak RSS (GiB) | Resolution | Steps | Seed | Thermal | File |")
+            lines.append("|---|----------|----------------|------------|-------|------|---------|------|")
             for row in overview:
                 idx = row.get("index", "—")
                 t = row.get("time")
@@ -407,7 +458,13 @@ class Profiler:
                 steps = row.get("steps", "—")
                 seed = row.get("seed", "—")
                 file = row.get("file", "—")
-                lines.append(f"| {idx} | {t_str} | {r_str} | {res} | {steps} | {seed} | {file} |")
+                th = row.get("thermal_state")
+                if th:
+                    from mage_mlx.thermal import format_thermal_state
+                    th_str = format_thermal_state(th)
+                else:
+                    th_str = "—"
+                lines.append(f"| {idx} | {t_str} | {r_str} | {res} | {steps} | {seed} | {th_str} | {file} |")
 
             # Text encode / decode row (worker mode)
             if summary and summary.get("text_encode_time", 0) > 0:
@@ -639,6 +696,7 @@ class _PromptRow:
     generation_time: Optional[float]
     peak_rss_gib: Optional[float]
     saved_file: Optional[str]
+    thermal_state: Optional[dict] = None
 
 
 class LiveReport:
@@ -665,6 +723,7 @@ class LiveReport:
         self.phases: list[_PhaseRow] = []
         self.prompts: list[_PromptRow] = []
         self._phase_times: list[float] = []  # for relative color scaling
+        self._thermal_state: Optional[dict] = None
         self.profiler = profiler  # reference for incremental saves
         self._print_header()
 
@@ -685,10 +744,7 @@ class LiveReport:
 
     # ── progress bar (non-verbose mode) ──
     def progress_bar(self, name: str) -> None:
-        """Print a single in-place progress bar using carriage return.
-
-        Overwrites itself on the same line using \\033[K to clear line.
-        """
+        """Print a single in-place progress bar using carriage return."""
         count = len(self.phases)
         bar = '█' * (count * 2)
         print(f"\r\033[K  [{bar}] {name}", end="", flush=True)
@@ -861,6 +917,57 @@ class LiveReport:
         print(f"{_C.BOLD}{_C.MAGENTA}  Prompt {index}/{total}{_C.RESET}")
         print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
 
+    # ── thermal state ──
+    def _print_thermal_state_line(self, thermal_state: dict) -> None:
+        from mage_mlx.thermal import format_thermal_state
+        state_str = format_thermal_state(thermal_state)
+        level = thermal_state.get("thermal_throttling", "unknown")
+        color = {
+            "NOMINAL": _C.GREEN,
+            "FAIR": _C.YELLOW,
+            "SERIOUS": _C.MAGENTA,
+            "CRITICAL": _C.RED,
+        }.get(level, _C.GRAY)
+        print(f"  {_C.BOLD}Thermal:{_C.RESET} {color}{state_str}{_C.RESET}")
+
+    def print_thermal_state(self, thermal_state: Optional[dict] = None) -> None:
+        """Print the current thermal state (always visible).
+
+        Shows CPU/GPU thermal levels and a throttling label.
+        This is printed at the start of each prompt so you can see
+        whether thermal throttling is affecting generation times.
+
+        The thermal state is always captured and stored in the overview
+        table and metadata, regardless of verbose mode.
+
+        Args:
+            thermal_state: Optional pre-fetched thermal state dict.
+                If None, fetches it via :meth:`Profiler.get_thermal_state`.
+        """
+        if thermal_state is None:
+
+            thermal_state = Profiler.get_thermal_state()
+        from mage_mlx.thermal import format_thermal_state
+        # Non-verbose mode has an active carriage-return progress line.
+        # Defer printing until print_summary() has finalized that line.
+        self._thermal_state = thermal_state
+        if not self.verbose:
+            return
+        state_str = format_thermal_state(thermal_state)
+        # Color-code based on throttling level
+        level = thermal_state.get("thermal_throttling", "unknown")
+        if level == "NOMINAL":
+            color = _C.GREEN
+        elif level == "FAIR":
+            color = _C.YELLOW
+        elif level == "SERIOUS":
+            color = _C.MAGENTA
+        elif level == "CRITICAL":
+            color = _C.RED
+        else:
+            color = _C.GRAY
+        print(f"  {_C.BOLD}Thermal:{_C.RESET} {color}{state_str}{_C.RESET}")
+
     # ── prompt summary ──
     def add_prompt(
         self,
@@ -873,8 +980,15 @@ class LiveReport:
         generation_time: Optional[float],
         peak_rss_gib: Optional[float],
         saved_file: Optional[str],
+        thermal_state: Optional[dict] = None,
     ) -> None:
-        """Add a per-prompt summary row and trigger incremental save."""
+        """Add a per-prompt summary row and trigger incremental save.
+
+        Args:
+            thermal_state: Optional thermal state dict from
+                :meth:`Profiler.get_thermal_state`. Stored in the overview
+                for md/json output and printed in the summary table.
+        """
         pr = _PromptRow(
             index=index,
             prompt=prompt,
@@ -885,6 +999,7 @@ class LiveReport:
             generation_time=generation_time,
             peak_rss_gib=peak_rss_gib,
             saved_file=saved_file,
+            thermal_state=thermal_state,
         )
         self.prompts.append(pr)
 
@@ -899,6 +1014,7 @@ class LiveReport:
                     "steps": p.steps,
                     "seed": p.seed,
                     "file": p.saved_file,
+                    "thermal_state": p.thermal_state,
                 }
                 for p in self.prompts
             ]
@@ -933,6 +1049,8 @@ class LiveReport:
         if not self.verbose:
             self.finish()
             print()  # Final newline to complete the \r progress bar
+            if self._thermal_state is not None:
+                self._print_thermal_state_line(self._thermal_state)
         print()
         print(f"{_C.BOLD}{_C.CYAN}{'─' * 70}{_C.RESET}")
         print(f"{_C.BOLD}  Summary{_C.RESET}")
@@ -948,8 +1066,8 @@ class LiveReport:
         # Overview table
         if self.prompts:
             print(f"{_C.BOLD}  Overview:{_C.RESET}")
-            print(f"{_C.DIM}  {'#':>3}  {'Time':>8}   {'Peak RAM':>10}   {'Resolution':>12}   {'Steps':>5}   {'Seed':>5}   File{_C.RESET}")
-            print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
+            print(f"{_C.DIM}  {'#':>3}  {'Time':>8}   {'Peak RAM':>10}   {'Resolution':>12}   {'Steps':>5}   {'Seed':>5}   {'Thermal':>14}   File{_C.RESET}")
+            print(f"{_C.DIM}  {'─' * 76}{_C.RESET}")
             gen_times = [p.generation_time for p in self.prompts if p.generation_time is not None]
             if gen_times:
                 t_min = min(gen_times)
@@ -963,10 +1081,27 @@ class LiveReport:
                     t_str = f"{_C.GRAY}—{_C.RESET}"
                 r_str = _colorize_ram(p.peak_rss_gib) if p.peak_rss_gib else f"{_C.GRAY}—{_C.RESET}"
                 seed_str = f"{p.seed}" if p.seed is not None else "—"
+                if p.thermal_state:
+                    from mage_mlx.thermal import format_thermal_state
+                    th_str = format_thermal_state(p.thermal_state)
+                    level = p.thermal_state.get("thermal_throttling", "unknown")
+                    if level == "NOMINAL":
+                        th_color = _C.GREEN
+                    elif level == "FAIR":
+                        th_color = _C.YELLOW
+                    elif level == "SERIOUS":
+                        th_color = _C.MAGENTA
+                    elif level == "CRITICAL":
+                        th_color = _C.RED
+                    else:
+                        th_color = _C.GRAY
+                    th_str = f"{th_color}{th_str}{_C.RESET}"
+                else:
+                    th_str = f"{_C.GRAY}—{_C.RESET}"
                 file_str = f"{_C.GREEN}{p.saved_file}{_C.RESET}" if p.saved_file else f"{_C.GRAY}—{_C.RESET}"
                 print(
                     f"  {p.index:>3}  {_ansi_rjust(t_str, 8)}   {_ansi_rjust(r_str, 10)}   "
-                    f"{p.resolution:>12}   {p.steps:>5}   {seed_str:>5}   {file_str}"
+                    f"{p.resolution:>12}   {p.steps:>5}   {seed_str:>5}   {_ansi_rjust(th_str, 14)}   {file_str}"
                 )
 
             sum_gen = sum(p.generation_time for p in self.prompts if p.generation_time is not None)

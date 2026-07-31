@@ -15,6 +15,7 @@ Components:
     profiler      — Phase-level timing and memory profiler
     embedding_cache — Prompt embedding cache (skip Qwen load on cache hit)
     worker        — Persistent JSONL worker (models stay resident)
+    thermal       — macOS thermal state monitoring (notify framework + sysctl fallback)
 """
 
 from .pipeline import MageFlowPipeline, MageFlowTokenizer
@@ -26,6 +27,7 @@ from .vision_model import MageFlowQwen3VLVisionModel
 from .rope import MageFlowEmbedRope
 from .profiler import Profiler
 from .embedding_cache import EmbeddingCache
+from .thermal import get_thermal_state
 
 __all__ = [
     "MageFlowPipeline",
@@ -39,5 +41,6 @@ __all__ = [
     "MageFlowEmbedRope",
     "Profiler",
     "EmbeddingCache",
+    "get_thermal_state",
 ]
 __version__ = "0.2.0"

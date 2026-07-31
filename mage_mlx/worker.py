@@ -382,6 +382,13 @@ def run_worker(
     for i, prompt_cfg in enumerate(prompts):
         params = merge_params(defaults, prompt_cfg)
 
+        # Print thermal state at the start of each prompt (verbose mode only;
+        # always captured for metadata output)
+        thermal_state = None
+        if report:
+            thermal_state = Profiler.get_thermal_state()
+            report.print_thermal_state(thermal_state)
+
         # Print prompt header via LiveReport
         if report and report.verbose:
             report.prompt_header(i + 1, len(prompts))
@@ -483,6 +490,7 @@ def run_worker(
             "generation_time_seconds": gen_elapsed,
             "peak_rss_gib": gen_peak_rss,
             "image_path": params["output"],
+            "thermal_state": thermal_state,
         })
 
         # Add to LiveReport for per-prompt summary table
@@ -497,6 +505,7 @@ def run_worker(
                 generation_time=gen_elapsed,
                 peak_rss_gib=gen_peak_rss,
                 saved_file=params["output"],
+                thermal_state=thermal_state,
             )
 
     # --- Stop total_wall_clock before saving metadata ---
@@ -530,6 +539,7 @@ def run_worker(
                 "steps": pm["steps"],
                 "seed": pm.get("seed"),
                 "file": pm["image_path"],
+                "thermal_state": pm.get("thermal_state"),
             }
             for pm in prompt_metadata
         ]
@@ -974,6 +984,13 @@ def run_edit_worker(
     for i, prompt_cfg in enumerate(prompts):
         params = merge_params(defaults, prompt_cfg)
 
+        # Print thermal state at the start of each prompt (verbose mode only;
+        # always captured for metadata output)
+        thermal_state = None
+        if report:
+            thermal_state = Profiler.get_thermal_state()
+            report.print_thermal_state(thermal_state)
+
         if report and report.verbose:
             report.prompt_header(i + 1, len(prompts))
 
@@ -1251,6 +1268,7 @@ def run_edit_worker(
             "peak_rss_gib": gen_peak_rss,
             "image_path": params["output"],
             "ref_images": ref_image_paths,
+            "thermal_state": thermal_state,
         })
 
         if report:
@@ -1264,6 +1282,7 @@ def run_edit_worker(
                 generation_time=gen_elapsed,
                 peak_rss_gib=gen_peak_rss,
                 saved_file=params["output"],
+                thermal_state=thermal_state,
             )
 
     # --- Stop total_wall_clock before saving metadata ---
@@ -1295,6 +1314,7 @@ def run_edit_worker(
                 "steps": pm["steps"],
                 "seed": pm.get("seed"),
                 "file": pm["image_path"],
+                "thermal_state": pm.get("thermal_state"),
             }
             for pm in prompt_metadata
         ]
