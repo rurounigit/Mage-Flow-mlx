@@ -12,6 +12,45 @@ Mage-Flow is a compact 4B-parameter generative stack for text-to-image generatio
 
 This port translates the PyTorch/CUDA implementation to native MLX, running entirely on Apple Silicon. No PyTorch or CUDA is needed at inference time — only MLX.
 
+
+<table align="center" style="border-collapse: collapse; width: 100%; max-width: 1536px; table-layout: fixed;">
+  <!-- Row 1: Images (Zero padding / margins) -->
+  <tr>
+     <td valign="top" style="padding: 0 0px; width: 33.33%; line-height: 0;">
+        <a href="/examples/test_06_mars_diner_new.png" style="display: block; margin: 0; padding: 0;">
+          <img style="width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; display: block; border: none; margin: 0;" src="/examples/test_06_mars_diner_new.png"/>
+        </a>
+     </td>
+     <td valign="top" style="padding: 0 0px; width: 33.33%; line-height: 0;">
+        <a href="/examples/test_02_cosmic_wolf_new.png" style="display: block; margin: 0; padding: 0;">
+          <img style="width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; display: block; border: none; margin: 0;" src="/examples/test_02_cosmic_wolf_new.png"/>
+        </a>
+     </td>
+     <td valign="top" style="padding: 0 0px; width: 33.33%; line-height: 0;">
+        <a href="/examples/test_03_girl_new.png" style="display: block; margin: 0; padding: 0;">
+          <img style="width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; display: block; border: none; margin: 0;" src="/examples/test_03_girl_new.png"/>
+        </a>
+     </td>
+     <td valign="top" style="padding: 0 0px; width: 33.33%; line-height: 0;">
+        <a href="/examples/test_07_old_man_new.png" style="display: block; margin: 0; padding: 0;">
+          <img style="width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; display: block; border: none; margin: 0;" src="/examples/test_07_old_man_new.png"/>
+        </a>
+     </td>
+  </tr>
+  <!-- Row 2: Prompts (Tightly attached underneath) -->
+  <tr>
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">A retro-futuristic diner on Mars, neon signs, red planet landscape visible through windows, 1950s sci-fi movie poster style, the name of the diner is 'mage', seed: 47
+     </td>
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">Anime shonen style, an astronaut riding a cosmic wolf through a nebula, bioluminescent fur, star trails, ethereal purple and blue lighting, seed: 43
+     </td>
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">90s selfie grunge vice a portrait of a punk girl sitting on an old sofa, seed: 100
+     </td>
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">A close-up portrait of an elderly African man with deep wrinkles, wearing a traditional hat, soft natural lighting, ultra realistic., seed: 42
+     </td>
+  </tr>
+</table>
+
+
 ## Requirements
 
 - **Mac:** M1/M2/M3/M4/M5 series (Apple Silicon)
@@ -102,7 +141,7 @@ python generate.py [OPTIONS]
 ### Examples
 
 ```bash
-# Default 1024×1024, four-step Turbo generation
+# Default 1024×1024, seed 42, four-step Turbo generation
 python generate.py \
   --prompt "A futuristic cityscape at sunset, photorealistic"
 
