@@ -37,6 +37,7 @@ class MageFlowWeightDefinition:
                 precision=ModelConfig.precision,
                 key_transform=MageFlowWeightMapping.transform_transformer_key,
                 expected_hf_weight_count=MageFlowWeightMapping.EXPECTED_HF_WEIGHT_COUNTS["transformer"],
+                native_file="transformer.safetensors",
             ),
             MageFlowComponentDefinition(
                 name="text_encoder",
