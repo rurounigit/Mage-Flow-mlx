@@ -4,7 +4,8 @@ Native Apple Silicon port of Microsoft's **Mage-Flow** (4B MMDiT) using [MLX](ht
 
 Speed:
 
-Macbook Air M5 24GB
+| Macbook Air M5 24GB |
+|---|---|---|
 | 17-18s | generation |
 | 18-22s | editing |
 | Peak RAM | <8GB |
