@@ -39,13 +39,13 @@ This port translates the PyTorch/CUDA implementation to native MLX, running enti
   </tr>
   <!-- Row 2: Prompts (Tightly attached underneath) -->
   <tr>
-     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">A retro-futuristic diner on Mars, neon signs, red planet landscape visible through windows, 1950s sci-fi movie poster style, the name of the diner is 'mage', seed: 47
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">"A retro-futuristic diner on Mars, neon signs, red planet landscape visible through windows, 1950s sci-fi movie poster style, the name of the diner is 'mage'", seed: 47
      </td>
-     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">Anime shonen style, an astronaut riding a cosmic wolf through a nebula, bioluminescent fur, star trails, ethereal purple and blue lighting, seed: 43
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">"Anime shonen style, an astronaut riding a cosmic wolf through a nebula, bioluminescent fur, star trails, ethereal purple and blue lighting", seed: 43
      </td>
-     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">90s selfie grunge vice a portrait of a punk girl sitting on an old sofa, seed: 100
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">"90s selfie grunge vice a portrait of a punk girl sitting on an old sofa", seed: 100
      </td>
-     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">A close-up portrait of an elderly African man with deep wrinkles, wearing a traditional hat, soft natural lighting, ultra realistic., seed: 42
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">"A close-up portrait of an elderly African man with deep wrinkles, wearing a traditional hat, soft natural lighting, ultra realistic.", seed: 42
      </td>
   </tr>
 </table>
@@ -212,6 +212,80 @@ The edit pipeline:
 **Note on CFG for edit**: The negative branch must be multimodal (same reference images) — a text-only negative removes vision tokens and produces an invalid unconditional edit condition.
 
 ### Edit Worker Mode
+
+<table align="center" style="border-collapse: collapse; width: 100%; max-width: 1536px; table-layout: fixed;">
+  <!-- Row 1: Images (Zero padding / margins) -->
+  <tr>
+     <td valign="top" style="padding: 0 0px; width: 33.33%; line-height: 0;">
+        <a href="/examples/test_10_shoe.png" style="display: block; margin: 0; padding: 0;">
+          <img style="width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; display: block; border: none; margin: 0;" src="/examples/test_10_shoe.png"/>
+        </a>
+     </td>
+     <td valign="top" style="padding: 0 0px; width: 33.33%; line-height: 0;">
+        <a href="/examples/test_10_shoe_edited.png" style="display: block; margin: 0; padding: 0;">
+          <img style="width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; display: block; border: none; margin: 0;" src="/examples/test_10_shoe_edited.png"/>
+        </a>
+     </td>
+     <td valign="top" style="padding: 0 0px; width: 33.33%; line-height: 0;">
+        <a href="/examples/test_10_shoe_edited_worker_01.png" style="display: block; margin: 0; padding: 0;">
+          <img style="width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; display: block; border: none; margin: 0;" src="/examples/test_10_shoe_edited_worker_01.png"/>
+        </a>
+     </td>
+     <td valign="top" style="padding: 0 0px; width: 33.33%; line-height: 0;">
+        <a href="/examples/test_10_shoe_edited_worker_02.png" style="display: block; margin: 0; padding: 0;">
+          <img style="width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; display: block; border: none; margin: 0;" src="/examples/test_10_shoe_edited_worker_02.png"/>
+        </a>
+     </td>
+  </tr>
+  <!-- Row 2: Prompts (Tightly attached underneath) -->
+  <tr>
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">"An unbranded futuristic running shoe made from white technical mesh with a vivid orange sole, floating above a pale gray studio surface, dramatic softbox lighting, premium product photography, photorealistic.", seed: 42
+     </td>
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">"change the shoe to deep burgundy polished leather with a translucent smoke-gray sole and subtle chrome details. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.", seed: 43
+     </td>
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">"change the shoe to metallic green mesh with a translucent  sole and subtle fur details. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.", seed: 42
+     </td>
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">"change the shoe to deep blue polished leather with a translucent smoke-gray sole and subtle chrome details. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.", seed: 43
+     </td>
+  </tr>
+</table>
+
+<table align="center" style="border-collapse: collapse; width: 100%; max-width: 1536px; table-layout: fixed;">
+  <!-- Row 1: Images (Zero padding / margins) -->
+  <tr>
+     <td valign="top" style="padding: 0 0px; width: 33.33%; line-height: 0;">
+        <a href="/examples/test_10_shoe_edited_worker_03.png" style="display: block; margin: 0; padding: 0;">
+          <img style="width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; display: block; border: none; margin: 0;" src="/examples/test_10_shoe_edited_worker_03.png"/>
+        </a>
+     </td>
+     <td valign="top" style="padding: 0 0px; width: 33.33%; line-height: 0;">
+        <a href="/examples/test_10_shoe_edited_worker_04.png" style="display: block; margin: 0; padding: 0;">
+          <img style="width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; display: block; border: none; margin: 0;" src="/examples/test_10_shoe_edited_worker_04.png"/>
+        </a>
+     </td>
+     <td valign="top" style="padding: 0 0px; width: 33.33%; line-height: 0;">
+        <a href="/examples/test_10_shoe_edited_worker_05.png" style="display: block; margin: 0; padding: 0;">
+          <img style="width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; display: block; border: none; margin: 0;" src="/examples/test_10_shoe_edited_worker_05.png"/>
+        </a>
+     </td>
+     <td valign="top" style="padding: 0 0px; width: 33.33%; line-height: 0;">
+        <a href="/examples/test_10_shoe_edited_worker_08.png" style="display: block; margin: 0; padding: 0;">
+          <img style="width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; display: block; border: none; margin: 0;" src="/examples/test_10_shoe_edited_worker_08.png"/>
+        </a>
+     </td>
+  </tr>
+  <!-- Row 2: Prompts (Tightly attached underneath) -->
+  <tr>
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">"change the shoe to a matte black finish with a red-orange translucent sole and small green accents. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.", seed: 44
+     </td>
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">"change the shoe to beige canvas with a solid white sole and navy blue stitching. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.", seed: 45
+     </td>
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">"change the shoe to full gray suede with an off-white sole and silver eyelets. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.", seed: 46
+     </td>
+     <td valign="top" style="padding: 4px 5px 0 5px; line-height: 1.3; font-size: 14px;">"change the shoe to light pink woven textile with a translucent pink sole and white embroidered details. Preserve the exact silhouette, panel seams, laces, camera angle, floating pose, lighting, shadows, and background.", seed: 49
+     </td>
+  </tr>
+</table>
 
 ```bash
 python generate.py --worker prompts_edit.jsonl --edit
