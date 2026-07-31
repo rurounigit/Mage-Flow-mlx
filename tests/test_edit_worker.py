@@ -485,11 +485,11 @@ class TestCLIRouting:
         # Simulate the model selection logic from generate.py
         if args.model is None:
             args.model = (
-                "models/microsoft_Mage-Flow-Edit-Turbo"
+                "models/Comfy-Org_Mage-Flow-Edit-Turbo"
                 if args.image is not None or args.edit
-                else "models/microsoft_Mage-Flow-Turbo"
+                else "models/Comfy-Org_Mage-Flow-Turbo"
             )
-        assert args.model == "models/microsoft_Mage-Flow-Edit-Turbo"
+        assert args.model == "models/Comfy-Org_Mage-Flow-Edit-Turbo"
 
     def test_model_selection_for_txt2img(self):
         """Without --edit, model should default to txt2img model."""
@@ -502,11 +502,11 @@ class TestCLIRouting:
         args = parser.parse_args(["--worker", "test.jsonl"])
         if args.model is None:
             args.model = (
-                "models/microsoft_Mage-Flow-Edit-Turbo"
+                "models/Comfy-Org_Mage-Flow-Edit-Turbo"
                 if args.image is not None or args.edit
-                else "models/microsoft_Mage-Flow-Turbo"
+                else "models/Comfy-Org_Mage-Flow-Turbo"
             )
-        assert args.model == "models/microsoft_Mage-Flow-Turbo"
+        assert args.model == "models/Comfy-Org_Mage-Flow-Turbo"
 
     def test_model_selection_with_image(self):
         """With --image, model should default to edit model."""
@@ -518,11 +518,11 @@ class TestCLIRouting:
         args = parser.parse_args(["--image", "foo.png"])
         if args.model is None:
             args.model = (
-                "models/microsoft_Mage-Flow-Edit-Turbo"
+                "models/Comfy-Org_Mage-Flow-Edit-Turbo"
                 if args.image is not None or args.edit
-                else "models/microsoft_Mage-Flow-Turbo"
+                else "models/Comfy-Org_Mage-Flow-Turbo"
             )
-        assert args.model == "models/microsoft_Mage-Flow-Edit-Turbo"
+        assert args.model == "models/Comfy-Org_Mage-Flow-Edit-Turbo"
 
     def test_model_selection_explicit_override(self):
         """Explicit --model should not be overridden."""
@@ -535,9 +535,9 @@ class TestCLIRouting:
         args = parser.parse_args(["--worker", "test.jsonl", "--edit", "--model", "custom/model"])
         if args.model is None:
             args.model = (
-                "models/microsoft_Mage-Flow-Edit-Turbo"
+                "models/Comfy-Org_Mage-Flow-Edit-Turbo"
                 if args.image is not None or args.edit
-                else "models/microsoft_Mage-Flow-Turbo"
+                else "models/Comfy-Org_Mage-Flow-Turbo"
             )
         assert args.model == "custom/model"
 
@@ -683,6 +683,6 @@ class TestEditRegressionContracts:
 
     def test_local_edit_path_infers_edit_hf_repo(self):
         # Keep the repository inference contract visible without downloading.
-        output_dir = "models/microsoft_Mage-Flow-Edit-Turbo"
+        output_dir = "models/Comfy-Org_Mage-Flow-Edit-Turbo"
         organization, model_name = os.path.basename(output_dir).split("_", 1)
-        assert f"{organization}/{model_name}" == "microsoft/Mage-Flow-Edit-Turbo"
+        assert f"{organization}/{model_name}" == "Comfy-Org/Mage-Flow-Edit-Turbo"

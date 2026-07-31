@@ -6,11 +6,11 @@ Speed:
 
 Macbook Air M5 24GB
 
-| mode | time |
-| :--- | :--- |
-| **Generation** | 17–18s |
-| **Editing** | 18–22s |
-| **Peak RAM** | < 8GB |
+| mode           | time   |
+| :------------- | :----- |
+| **Generation (Turbo)** | 17–18s |
+| **Editing (Turbo)** | 18–22s |
+| **Peak RAM**   | < 8GB  |
 
 
 <table align="center" style="border-collapse: collapse; width: 100%; max-width: 1536px; table-layout: fixed;">
@@ -93,8 +93,8 @@ cached separately without modifying the canonical checkpoint.
 
 You do not need to run `convert_weights.py` manually. When you run `generate.py`, the pipeline will:
 
-1. Check if converted MLX weights exist locally (default: `models/microsoft_Mage-Flow-Turbo/`)
-2. If missing, automatically download the raw PyTorch weights from HuggingFace (`microsoft/Mage-Flow-Turbo`)
+1. Check if converted MLX weights exist locally (default: `models/Comfy-Org_Mage-Flow-Turbo/`)
+2. If missing, automatically download the raw PyTorch weights from HuggingFace (`Comfy-Org/Mage-Flow`)
 3. Convert them to native MLX BF16 format on-the-fly
 4. Cache the converted weights for instant startup on subsequent runs
 
@@ -102,10 +102,10 @@ When `--quantize 4` or `--quantize 8` is requested for the first time, the
 pipeline derives and atomically saves a persistent packed DiT variant:
 
 ```text
-models/microsoft_Mage-Flow-Turbo/transformer_quant4.safetensors
-models/microsoft_Mage-Flow-Turbo/transformer_quant4.json
-models/microsoft_Mage-Flow-Turbo/transformer_quant8.safetensors
-models/microsoft_Mage-Flow-Turbo/transformer_quant8.json
+models/Comfy-Org_Mage-Flow-Turbo/transformer_quant4.safetensors
+models/Comfy-Org_Mage-Flow-Turbo/transformer_quant4.json
+models/Comfy-Org_Mage-Flow-Turbo/transformer_quant8.safetensors
+models/Comfy-Org_Mage-Flow-Turbo/transformer_quant8.json
 ```
 
 Later runs construct the matching `nn.QuantizedLinear` module layout and load
@@ -116,17 +116,17 @@ layers, and BF16 source signature. A stale or incompatible cache is rebuilt.
 You can also explicitly pass a HuggingFace repo ID:
 
 ```bash
-# Uses microsoft/Mage-Flow-Turbo (auto-downloads and converts on first run)
-python generate.py --model microsoft/Mage-Flow-Turbo --prompt "..."
+# Uses Comfy-Org/Mage-Flow (auto-downloads and converts on first run)
+python generate.py --model Comfy-Org/Mage-Flow --prompt "..."
 
 # Or use a local converted directory
-python generate.py --model models/microsoft_Mage-Flow-Turbo --prompt "..."
+python generate.py --model models/Comfy-Org_Mage-Flow-Turbo --prompt "..."
 ```
 
 If you prefer to pre-convert weights manually (e.g., for offline use or custom repos), you can still use:
 
 ```bash
-python convert_weights.py --repo microsoft/Mage-Flow-Turbo --output models/microsoft_Mage-Flow-Turbo
+python convert_weights.py --repo Comfy-Org/Mage-Flow --output models/Comfy-Org_Mage-Flow-Turbo
 ```
 
 ## Generation Parameters
@@ -138,7 +138,7 @@ python generate.py [OPTIONS]
 | Parameter | Default | Description |
 |---|---|---|
 | `--prompt TEXT` | required | Description of the image to generate. Concrete subjects, composition, lighting, and style generally produce the most predictable result. |
-| `--model PATH` | `models/microsoft_Mage-Flow-Turbo` | Directory containing converted MLX weights, or a HuggingFace repo ID (e.g. `microsoft/Mage-Flow-Turbo`). On first run, weights are auto-downloaded and converted. |
+| `--model PATH` | `models/Comfy-Org_Mage-Flow-Turbo` | Directory containing converted MLX weights, or a HuggingFace repo ID (e.g. `Comfy-Org/Mage-Flow`). On first run, weights are auto-downloaded and converted. |
 | `--steps INTEGER` | `4` | Number of flow-matching denoising steps. Mage-Flow-Turbo is trained for four steps; increasing this is not guaranteed to improve quality and changes the scheduler trajectory. |
 | `--height INTEGER` | `1024` | Output height in pixels. Must be a positive multiple of 16. Higher resolutions require more unified memory and take longer. |
 | `--width INTEGER` | `1024` | Output width in pixels. Must be a positive multiple of 16. Non-square aspect ratios are supported. |
@@ -209,7 +209,7 @@ python generate.py \
   --output test_10_shoe_edited.png
 ```
 
-Providing `--image` automatically selects the dedicated `microsoft/Mage-Flow-Edit-Turbo` checkpoint. On first use, the loader downloads and converts it to a cached MLX directory; subsequent runs reuse that cache.
+Providing `--image` automatically selects the dedicated `Comfy-Org/Mage-Flow` checkpoint. On first use, the loader downloads and converts it to a cached MLX directory; subsequent runs reuse that cache.
 
 ### Edit Worker Mode
 
@@ -438,7 +438,7 @@ Text embeddings are cached on disk (~240 KB each vs. 8 GB Qwen weights).
 
 For a cache hit, Qwen loading and text encoding are skipped entirely. This is especially useful when testing seeds, resolutions, quantization levels, or scheduler changes with the same prompt.
 
-Cache files are stored in `models/microsoft_Mage-Flow-Turbo/embedding_cache/`.
+Cache files are stored in `models/Comfy-Org_Mage-Flow-Turbo/embedding_cache/`.
 
 ### Vision Cache
 
@@ -478,7 +478,7 @@ The JSON structure:
 ```json
 {
   "metadata": {
-    "model": "microsoft/Mage-Flow-Turbo",
+    "model": "Comfy-Org/Mage-Flow",
     "base_model": "MageFlowTransformer",
     "generation_time_seconds": 12.3,
     "created_at": "2026-07-29T20:55:00",

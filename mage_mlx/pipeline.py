@@ -5,7 +5,7 @@ and scheduler (FlowMatchEulerDiscrete) to generate images from text prompts.
 
 Usage:
     from mage_mlx import MageFlowPipeline
-    pipeline = MageFlowPipeline.from_pretrained("models/microsoft_Mage-Flow-Turbo")
+    pipeline = MageFlowPipeline.from_pretrained("models/Comfy-Org_Mage-Flow-Turbo")
     image = pipeline.generate("A futuristic cityscape at sunset")
 """
 
@@ -191,7 +191,7 @@ class MageFlowPipeline:
     @classmethod
     def from_pretrained(
         cls,
-        model_dir: str = "models/microsoft_Mage-Flow-Turbo",
+        model_dir: str = "models/Comfy-Org_Mage-Flow-Turbo",
         num_steps: int = 4,
         quantize: int | None = None,
         profiler: Optional["object"] = None,
@@ -322,7 +322,7 @@ class MageFlowPipeline:
     @classmethod
     def from_pretrained_text_encoder(
         cls,
-        model_dir: str = "models/microsoft_Mage-Flow-Turbo",
+        model_dir: str = "models/Comfy-Org_Mage-Flow-Turbo",
         num_steps: int = 4,
         profiler: Optional["object"] = None,
     ) -> "MageFlowPipeline":
@@ -368,7 +368,7 @@ class MageFlowPipeline:
 
     def load_dit_vae(
         self,
-        model_dir: str = "models/microsoft_Mage-Flow-Turbo",
+        model_dir: str = "models/Comfy-Org_Mage-Flow-Turbo",
         quantize: int | None = None,
         profiler: Optional["object"] = None,
     ) -> None:

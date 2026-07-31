@@ -3,7 +3,8 @@ import mlx.core as mx
 from mage_mlx.vae import MageVAE
 
 # Load the VAE weights file
-vae_path = 'models/mage_flow_mlx/vae.safetensors'
+vae_path = 'models/Comfy-Org_Mage-Flow-Turbo/vae.safetensors'
+
 weights = mx.load(vae_path)
 
 print(f"Total weights in file: {len(weights)}")

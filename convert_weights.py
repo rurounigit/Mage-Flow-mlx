@@ -1,13 +1,13 @@
 """Convert Mage-Flow PyTorch weights to native BF16 MLX format.
 
 This script:
-1. Downloads weights from HuggingFace (microsoft/Mage-Flow-Turbo)
+1. Downloads weights from HuggingFace (Comfy-Org/Mage-Flow)
 2. Converts PyTorch safetensors → MLX format tensor-by-tensor (low RAM usage)
 3. Preserves the source BF16 precision for generation quality
-4. Saves as MLX safetensors in models/microsoft_Mage-Flow-Turbo/
+4. Saves as MLX safetensors in models/Comfy-Org_Mage-Flow-Turbo/
 
 Usage:
-    python convert_weights.py [--repo microsoft/Mage-Flow-Turbo] [--output models/microsoft_Mage-Flow-Turbo]
+    python convert_weights.py [--repo Comfy-Org/Mage-Flow] [--output models/Comfy-Org_Mage-Flow-Turbo]
 """
 
 from __future__ import annotations
@@ -138,8 +138,8 @@ def map_vae_key(key: str) -> str | None:
 
 def main():
     parser = argparse.ArgumentParser(description="Convert Mage-Flow PyTorch weights to MLX (Low Memory)")
-    parser.add_argument("--repo", default="microsoft/Mage-Flow-Turbo", help="HuggingFace repo ID")
-    parser.add_argument("--output", default="models/microsoft_Mage-Flow-Turbo", help="Output directory")
+    parser.add_argument("--repo", default="Comfy-Org/Mage-Flow", help="HuggingFace repo ID")
+    parser.add_argument("--output", default="models/Comfy-Org_Mage-Flow-Turbo", help="Output directory")
     args = parser.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
@@ -149,7 +149,7 @@ def main():
 
     # 1. DiT weights
     print("\nConverting DiT weights (low RAM streaming)...")
-    dit_path = os.path.join(repo_dir, "transformer", "diffusion_pytorch_model.safetensors")
+    dit_path = os.path.join(repo_dir, "diffusion_models", "mage_flow_turbo_bf16.safetensors")
     process_and_convert_file(
         dit_path,
         os.path.join(args.output, "transformer.safetensors"),
@@ -157,7 +157,7 @@ def main():
     )
 
     # Save DiT config
-    with open(os.path.join(repo_dir, "transformer", "config.json")) as f:
+    with open(os.path.join(repo_dir, "diffusion_models", "config.json")) as f:
         dit_config = json.load(f)
     with open(os.path.join(args.output, "transformer_config.json"), "w") as f:
         json.dump(dit_config, f, indent=2)
@@ -174,7 +174,7 @@ def main():
 
     # 2. VAE weights
     print("\nConverting VAE weights...")
-    vae_path = os.path.join(repo_dir, "vae", "diffusion_pytorch_model.safetensors")
+    vae_path = os.path.join(repo_dir, "vae", "mage_flow_vae_bf16.safetensors")
     process_and_convert_file(
         vae_path,
         os.path.join(args.output, "vae.safetensors"),
@@ -183,7 +183,7 @@ def main():
 
     # 3. Text Encoder weights
     print("\nConverting Text Encoder weights (streaming shard by shard)...")
-    te_dir = os.path.join(repo_dir, "text_encoder")
+    te_dir = os.path.join(repo_dir, "text_encoders")
     mlx_te = {}
     for shard in sorted(os.listdir(te_dir)):
         if shard.endswith(".safetensors"):

@@ -14,7 +14,6 @@ import torch
 from huggingface_hub import snapshot_download
 from safetensors import safe_open
 
-
 def _read_safetensors_header(path: str) -> dict:
     """Read safetensors metadata without loading checkpoint tensors."""
     with open(path, "rb") as f:
@@ -27,7 +26,6 @@ def _read_safetensors_header(path: str) -> dict:
         if header_length <= 0 or header_length > 100 * 1024 * 1024:
             raise ValueError(f"Invalid safetensors header length in {path}")
         return json.loads(f.read(header_length))
-
 
 def is_unquantized_transformer(path: str) -> bool:
     """Return whether a checkpoint contains the expected floating DiT weights."""
@@ -49,9 +47,12 @@ def is_unquantized_transformer(path: str) -> bool:
     except (OSError, ValueError, json.JSONDecodeError, struct.error):
         return False
 
+def _cached_repo_snapshot(repo_id: str, dit_file: str | None = None) -> str | None:
+    """Resolve an existing Hugging Face snapshot even if optional files are absent.
 
-def _cached_repo_snapshot(repo_id: str) -> str | None:
-    """Resolve an existing Hugging Face snapshot even if optional files are absent."""
+    If dit_file is provided, also verify that the specific DiT checkpoint
+    exists in the cache (different model variants share the same repo).
+    """
     cache_root = os.environ.get(
         "HF_HUB_CACHE",
         os.path.join(os.path.expanduser("~"), ".cache", "huggingface", "hub"),
@@ -64,11 +65,19 @@ def _cached_repo_snapshot(repo_id: str) -> str | None:
     except OSError:
         return None
     snapshot = os.path.join(repo_cache, "snapshots", commit)
+    # Check for the VAE file, which is common to all Mage-Flow variants
+    # in the Comfy-Org/Mage-Flow repo (flat file structure).
     source = os.path.join(
-        snapshot, "transformer", "diffusion_pytorch_model.safetensors"
+        snapshot, "vae", "mage_flow_vae_bf16.safetensors"
     )
-    return snapshot if os.path.exists(source) else None
-
+    if not os.path.exists(source):
+        return None
+    # If a specific DiT file is requested, verify it exists in the cache too.
+    if dit_file is not None:
+        dit_path = os.path.join(snapshot, dit_file)
+        if not os.path.exists(dit_path):
+            return None
+    return snapshot
 
 def torch_to_mlx(tensor: torch.Tensor) -> mx.array:
     """Convert a CPU Torch tensor to MLX without losing BF16 precision."""
@@ -76,7 +85,6 @@ def torch_to_mlx(tensor: torch.Tensor) -> mx.array:
         storage = tensor.view(torch.uint16).numpy()
         return mx.array(storage).view(mx.bfloat16)
     return mx.array(tensor.numpy())
-
 
 def process_and_convert_file(
     safetensors_path: str,
@@ -117,7 +125,6 @@ def process_and_convert_file(
     del converted
     gc.collect()
 
-
 def map_dit_key(key: str) -> str | None:
     new_key = key.replace(".img_mlp.net.0.proj.", ".img_mlp.fc1.")
     new_key = new_key.replace(".img_mlp.net.2.", ".img_mlp.fc2.")
@@ -126,7 +133,6 @@ def map_dit_key(key: str) -> str | None:
     new_key = new_key.replace(".img_mod.1.", ".img_mod.")
     new_key = new_key.replace(".txt_mod.1.", ".txt_mod.")
     return new_key
-
 
 def map_text_encoder_key(key: str) -> str | None:
     """Map Hugging Face Qwen3-VL text keys to native MLX Qwen3-VL module tree.
@@ -147,12 +153,63 @@ def map_text_encoder_key(key: str) -> str | None:
         return key
     return "language_model." + key
 
-
-
 SHARED_TEXT_ENCODER_PATH = os.path.join(
     "models", "shared", "mage_flow_qwen3vl", "text_encoder.safetensors"
 )
 
+# All Mage-Flow models are now hosted under a single HuggingFace repo
+# (Comfy-Org/Mage-Flow) with a flat file structure. The specific DiT file
+# is selected based on the model variant (turbo vs edit-turbo).
+MAGE_FLOW_HF_REPO = "Comfy-Org/Mage-Flow"
+
+# Maps local model directory basenames to (HF repo ID, DiT file path within repo)
+MAGE_FLOW_MODEL_FILES = {
+    "microsoft_Mage-Flow-Turbo": (MAGE_FLOW_HF_REPO, "diffusion_models/mage_flow_turbo_bf16.safetensors"),
+    "microsoft_Mage-Flow-Edit-Turbo": (MAGE_FLOW_HF_REPO, "diffusion_models/mage_flow_edit_turbo_bf16.safetensors"),
+    "Comfy-Org_Mage-Flow-Turbo": (MAGE_FLOW_HF_REPO, "diffusion_models/mage_flow_turbo_bf16.safetensors"),
+    "Comfy-Org_Mage-Flow-Edit-Turbo": (MAGE_FLOW_HF_REPO, "diffusion_models/mage_flow_edit_turbo_bf16.safetensors"),
+}
+
+# Shared files that are always needed alongside the DiT weights, regardless
+# of which model variant is selected.  These are downloaded with exact paths
+# (no wildcards) so we never pull the entire 53 GB repo.
+MAGE_FLOW_SHARED_FILES = [
+    "vae/mage_flow_vae_bf16.safetensors",
+    "text_encoders/qwen3vl_4b_bf16.safetensors",
+    "diffusion_models/config.json",
+    "vae/config.json",
+    "text_encoders/config.json",
+    "text_encoders/tokenizer.json",
+    "text_encoders/tokenizer_config.json",
+    "text_encoders/vocab.json",
+    "text_encoders/merges.txt",
+]
+
+def _parse_hf_file_path(model_path_or_repo: str) -> tuple[str, str, str] | None:
+    """Parse a full HuggingFace file path into (repo_id, file_path, output_dir_name).
+
+    Handles paths like:
+        Comfy-Org/Mage-Flow/diffusion_models/mage_flow_turbo_int8_convrot.safetensors
+
+    Returns (repo_id, file_path, output_dir_name) or None if the input is not
+    a full HF file path (i.e., it's a repo ID or local directory).
+    """
+    parts = model_path_or_repo.split("/")
+    if len(parts) >= 3 and not model_path_or_repo.startswith("models/"):
+        repo_id = "/".join(parts[:2])
+        file_path = "/".join(parts[2:])
+        # Derive a clean local directory name from the filename
+        filename = os.path.basename(file_path)
+        # Strip extension and common suffixes to get a readable name
+        name = filename.replace(".safetensors", "")
+        # e.g. "mage_flow_turbo_int8_convrot" -> "Mage-Flow-Turbo-Int8-Convrot"
+        name = name.replace("_", "-").title().replace("-", " ")
+        # Capitalize each word and rejoin with hyphens
+        words = name.split()
+        name = "-".join(w.capitalize() for w in words)
+        output_dir_name = f"Comfy-Org_Mage-Flow-{name}"
+        return repo_id, file_path, output_dir_name
+    return None
 
 def _has_visual_weights(path: str) -> bool:
     """Return whether a converted encoder uses the canonical visual namespace."""
@@ -164,7 +221,6 @@ def _has_visual_weights(path: str) -> bool:
     except (OSError, ValueError):
         return False
 
-
 def resolve_text_encoder_path(model_dir: str) -> str | None:
     """Resolve and migrate to the shared Qwen3-VL text encoder cache."""
     shared = SHARED_TEXT_ENCODER_PATH
@@ -172,7 +228,7 @@ def resolve_text_encoder_path(model_dir: str) -> str | None:
     if os.path.isdir("models"):
         candidates.extend(
             os.path.join("models", name, "text_encoder.safetensors")
-            for name in os.listdir("models") if name.startswith("microsoft_")
+            for name in os.listdir("models") if name.startswith("Comfy-Org_")
         )
     if not _has_visual_weights(shared):
         source = next((path for path in candidates if _has_visual_weights(path)), None)
@@ -187,7 +243,6 @@ def resolve_text_encoder_path(model_dir: str) -> str | None:
         return shared
     local = os.path.join(model_dir, "text_encoder.safetensors")
     return local if os.path.exists(local) else None
-
 
 def map_vae_key(key: str) -> str | None:
     if "y_embedder.encoder." in key or "y_embedder.bottleneck." in key:
@@ -227,9 +282,8 @@ def map_vae_key(key: str) -> str | None:
         return "decoder_model." + key[len("pipeline."):]
     return key
 
-
 def ensure_mlx_model(
-    model_path_or_repo: str = "models/microsoft_Mage-Flow-Turbo",
+    model_path_or_repo: str = "models/Comfy-Org_Mage-Flow-Turbo",
     quantize: int | None = None,
     profiler: Optional["object"] = None,
 ) -> tuple[str, int | None]:
@@ -248,23 +302,47 @@ def ensure_mlx_model(
     """
     required_files = ["transformer.safetensors", "vae.safetensors", "transformer_config.json"]
 
-    # Determine output directory and repo ID
-    if "/" in model_path_or_repo and not os.path.exists(model_path_or_repo) and not model_path_or_repo.startswith("models/"):
-        repo_id = model_path_or_repo
-        safe_name = model_path_or_repo.replace("/", "_")
-        output_dir = os.path.join("models", safe_name)
+    # Check if the input is a full HuggingFace file path (e.g.,
+    # "Comfy-Org/Mage-Flow/diffusion_models/mage_flow_turbo_int8_convrot.safetensors")
+    hf_file = _parse_hf_file_path(model_path_or_repo)
+    if hf_file is not None:
+        repo_id, specific_dit_file, output_dir_name = hf_file
+        output_dir = os.path.join("models", output_dir_name)
+        basename = output_dir_name
+        dit_file = specific_dit_file
     else:
-        output_dir = model_path_or_repo
-        basename = os.path.basename(os.path.normpath(output_dir))
-        if output_dir.startswith("models/") and "_" in basename:
-            organization, model_name = basename.split("_", 1)
-            repo_id = f"{organization}/{model_name}"
+        # Determine output directory and repo ID
+        if "/" in model_path_or_repo and not os.path.exists(model_path_or_repo) and not model_path_or_repo.startswith("models/"):
+            repo_id = model_path_or_repo
+            safe_name = model_path_or_repo.replace("/", "_")
+            output_dir = os.path.join("models", safe_name)
+            basename = safe_name
         else:
-            repo_id = "microsoft/Mage-Flow-Turbo"
+            output_dir = model_path_or_repo
+            basename = os.path.basename(os.path.normpath(output_dir))
+            if output_dir.startswith("models/") and "_" in basename:
+                organization, model_name = basename.split("_", 1)
+                repo_id = f"{organization}/{model_name}"
+            else:
+                repo_id = MAGE_FLOW_HF_REPO
+
+        # Override repo_id for known Mage-Flow model directories — all variants
+        # now live under the single Comfy-Org/Mage-Flow HuggingFace repo.
+        if basename in MAGE_FLOW_MODEL_FILES:
+            repo_id, _dit_file = MAGE_FLOW_MODEL_FILES[basename]
+
+        # Determine which DiT file to use based on the model variant
+        is_edit = "edit" in basename.lower()
+        if basename in MAGE_FLOW_MODEL_FILES:
+            _, dit_file = MAGE_FLOW_MODEL_FILES[basename]
+        elif is_edit:
+            dit_file = "diffusion_models/mage_flow_edit_turbo_bf16.safetensors"
+        else:
+            dit_file = "diffusion_models/mage_flow_turbo_bf16.safetensors"
 
     # Migrate the original local default without copying multi-GB files.  Keep
     # a symlink at the legacy path so existing scripts remain compatible.
-    canonical_default = os.path.join("models", "microsoft_Mage-Flow-Turbo")
+    canonical_default = os.path.join("models", "Comfy-Org_Mage-Flow-Turbo")
     legacy_default = os.path.join("models", "mage_flow_mlx")
     if output_dir == canonical_default and not os.path.exists(output_dir):
         if os.path.isdir(legacy_default) and os.path.exists(os.path.join(legacy_default, "transformer.safetensors")):
@@ -299,17 +377,21 @@ def ensure_mlx_model(
         if profiler:
             profiler.log(f"  Downloading from HuggingFace: {repo_id}...")
         print("  This may take a while (17GB of weights)...")
-        repo_dir = _cached_repo_snapshot(repo_id) or snapshot_download(
+        # Build exact allow_patterns to download only the specific files we need,
+        # not the entire 53 GB repo (which contains multiple model variants).
+        allow_patterns = [dit_file] + MAGE_FLOW_SHARED_FILES
+        repo_dir = _cached_repo_snapshot(repo_id, dit_file) or snapshot_download(
             repo_id,
-            allow_patterns=["*.safetensors", "*.json", "*.txt"],
+            allow_patterns=allow_patterns,
         )
         print(f"  Downloaded to: {repo_dir}")
 
         # 1. DiT weights & config
+
         print("Converting DiT weights...")
         if profiler:
             profiler.log("Converting DiT weights...")
-        dit_path = os.path.join(repo_dir, "transformer", "diffusion_pytorch_model.safetensors")
+        dit_path = os.path.join(repo_dir, dit_file)
         if not transformer_valid and os.path.exists(dit_path):
             process_and_convert_file(
                 dit_path,
@@ -317,7 +399,10 @@ def ensure_mlx_model(
                 key_mapper_fn=map_dit_key,
             )
 
-        dit_config_src = os.path.join(repo_dir, "transformer", "config.json")
+        # DiT config — try the new flat structure first, then the old diffusers layout
+        dit_config_src = os.path.join(repo_dir, "diffusion_models", "config.json")
+        if not os.path.exists(dit_config_src):
+            dit_config_src = os.path.join(repo_dir, "transformer", "config.json")
         if os.path.exists(dit_config_src):
             with open(dit_config_src) as f:
                 dit_config = json.load(f)
@@ -339,7 +424,7 @@ def ensure_mlx_model(
         print("Converting VAE weights...")
         if profiler:
             profiler.log("Converting VAE weights...")
-        vae_path = os.path.join(repo_dir, "vae", "diffusion_pytorch_model.safetensors")
+        vae_path = os.path.join(repo_dir, "vae", "mage_flow_vae_bf16.safetensors")
         vae_out_path = os.path.join(output_dir, "vae.safetensors")
         if not os.path.exists(vae_out_path) and os.path.exists(vae_path):
             process_and_convert_file(
@@ -352,31 +437,27 @@ def ensure_mlx_model(
         print("Converting Text Encoder weights...")
         if profiler:
             profiler.log("Converting Text Encoder weights...")
-        te_dir = os.path.join(repo_dir, "text_encoder")
+        te_path = os.path.join(repo_dir, "text_encoders", "qwen3vl_4b_bf16.safetensors")
         mlx_te = {}
         te_out_path = SHARED_TEXT_ENCODER_PATH
-        if not _has_visual_weights(te_out_path) and os.path.exists(te_dir):
+        if not _has_visual_weights(te_out_path) and os.path.exists(te_path):
             os.makedirs(os.path.dirname(te_out_path), exist_ok=True)
-            for shard in sorted(os.listdir(te_dir)):
-                if shard.endswith(".safetensors"):
-                    shard_path = os.path.join(te_dir, shard)
-                    with safe_open(shard_path, framework="pt") as f:
-                        for key in list(f.keys()):
-                            t = f.get_tensor(key)
-                            mapped_key = map_text_encoder_key(key)
-                            if mapped_key is None:
-                                del t
-                                continue
-                            mx_arr = torch_to_mlx(t)
-                            if mx_arr.ndim == 4:
-                                mx_arr = mx.transpose(mx_arr, (0, 2, 3, 1))
-                            elif mx_arr.ndim == 5:
-                                mx_arr = mx.transpose(mx_arr, (0, 2, 3, 4, 1))
-                            mx.eval(mx_arr)
-                            mlx_te[mapped_key] = mx_arr
-                            del t, mx_arr
-                            gc.collect()
-
+            with safe_open(te_path, framework="pt") as f:
+                for key in list(f.keys()):
+                    t = f.get_tensor(key)
+                    mapped_key = map_text_encoder_key(key)
+                    if mapped_key is None:
+                        del t
+                        continue
+                    mx_arr = torch_to_mlx(t)
+                    if mx_arr.ndim == 4:
+                        mx_arr = mx.transpose(mx_arr, (0, 2, 3, 1))
+                    elif mx_arr.ndim == 5:
+                        mx_arr = mx.transpose(mx_arr, (0, 2, 3, 4, 1))
+                    mx.eval(mx_arr)
+                    mlx_te[mapped_key] = mx_arr
+                    del t, mx_arr
+                    gc.collect()
 
         if mlx_te:
             mx.save_safetensors(te_out_path, mlx_te)

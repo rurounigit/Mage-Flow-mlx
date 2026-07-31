@@ -57,8 +57,8 @@ VALID_PARAMS = {
 def _get_model_name(model_dir: str) -> str:
     """Convert model directory path to HuggingFace model name.
 
-    e.g. 'models/microsoft_Mage-Flow-Turbo' -> 'microsoft/Mage-Flow-Turbo'
-    e.g. 'microsoft/Mage-Flow-Turbo' -> 'microsoft/Mage-Flow-Turbo'
+    e.g. 'models/Comfy-Org_Mage-Flow-Turbo' -> 'Comfy-Org/Mage-Flow'
+    e.g. 'Comfy-Org/Mage-Flow' -> 'Comfy-Org/Mage-Flow'
     """
     basename = os.path.basename(model_dir.rstrip("/"))
     return basename.replace("_", "/")
@@ -239,7 +239,7 @@ def run_worker(
         profiler.on_phase_complete = _on_phase_complete
 
     # Initialize cache
-    cache = EmbeddingCache(defaults.get("model", "models/microsoft_Mage-Flow-Turbo"))
+    cache = EmbeddingCache(defaults.get("model", "models/Comfy-Org_Mage-Flow-Turbo"))
 
     # Track current pipeline state
     current_params: dict[str, Any] = {}
@@ -812,7 +812,7 @@ def run_edit_worker(
         profiler.start("pipeline_load")
     # Load text encoder from shared path (text encoder is shared across all models)
     from mage_mlx.pipeline import resolve_text_encoder_path
-    te_weights_path = resolve_text_encoder_path("models/microsoft_Mage-Flow-Turbo")
+    te_weights_path = resolve_text_encoder_path("models/Comfy-Org_Mage-Flow-Turbo")
     from mage_mlx.text_encoder import MageFlowTextEncoder
     te = MageFlowTextEncoder(
         model_path=te_weights_path if os.path.exists(te_weights_path) else None,

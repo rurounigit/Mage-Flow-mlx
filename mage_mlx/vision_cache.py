@@ -12,7 +12,7 @@ compared with the ~1 GiB VAE weights and the ~7.9 GiB peak RAM.
 Usage:
     from mage_mlx.vision_cache import VisionCache
 
-    cache = VisionCache(model_dir="models/microsoft_Mage-Flow-Edit-Turbo")
+    cache = VisionCache(model_dir="models/Comfy-Org_Mage-Flow-Edit-Turbo")
     key = cache.make_key(image_bytes=raw_bytes, size=(1024, 1024), vae_path="vae.safetensors")
     latents = cache.get(key)
     if latents is None:
@@ -42,7 +42,7 @@ class VisionCache:
             ``model_dir/vision_cache/``)
     """
 
-    def __init__(self, model_dir: str = "models/microsoft_Mage-Flow-Turbo"):
+    def __init__(self, model_dir: str = "models/Comfy-Org_Mage-Flow-Turbo"):
         self.cache_dir = os.path.join(model_dir, "vision_cache")
         os.makedirs(self.cache_dir, exist_ok=True)
 

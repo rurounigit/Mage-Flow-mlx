@@ -4,7 +4,8 @@ import numpy as np
 from PIL import Image
 from mage_mlx.pipeline import MageFlowPipeline
 
-pipe = MageFlowPipeline.from_pretrained('models/mage_flow_mlx')
+pipe = MageFlowPipeline.from_pretrained('models/Comfy-Org_Mage-Flow-Turbo')
+
 
 # Create a simple test image: gradient with a recognizable pattern
 H, W = 512, 512

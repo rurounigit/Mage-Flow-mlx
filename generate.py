@@ -6,7 +6,7 @@ Usage:
     python generate.py --prompt "A futuristic cityscape at sunset"
     python generate.py --prompt "..." --steps 4 --height 1024 --width 1024 --seed 42
     python generate.py --prompt "..." --output output.png
-    python generate.py --prompt "..." --model microsoft/Mage-Flow-Turbo
+    python generate.py --prompt "..." --model Comfy-Org/Mage-Flow
     python generate.py --prompt "..." --quantize 4
     python generate.py --prompt "..." --metadata
     python generate.py --worker prompts.jsonl --metadata
@@ -30,8 +30,8 @@ import mlx.core as mx
 def _get_model_name(model_dir: str) -> str:
     """Convert model directory path to HuggingFace model name.
 
-    e.g. 'models/microsoft_Mage-Flow-Turbo' -> 'microsoft/Mage-Flow-Turbo'
-    e.g. 'microsoft/Mage-Flow-Turbo' -> 'microsoft/Mage-Flow-Turbo'
+    e.g. 'models/Comfy-Org_Mage-Flow-Turbo' -> 'Comfy-Org/Mage-Flow'
+    e.g. 'Comfy-Org/Mage-Flow' -> 'Comfy-Org/Mage-Flow'
     """
     basename = os.path.basename(model_dir.rstrip("/"))
     return basename.replace("_", "/")
@@ -84,7 +84,7 @@ def main():
     )
     parser.add_argument(
         "--model", type=str, default=None,
-        help="Path to the BF16 MLX model directory or HuggingFace repo ID (e.g. microsoft/Mage-Flow-Turbo)"
+        help="Path to the BF16 MLX model directory or HuggingFace repo ID (e.g. Comfy-Org/Mage-Flow)"
     )
     parser.add_argument(
         "--steps", type=int, default=4,
@@ -154,9 +154,9 @@ def main():
     model_was_explicit = args.model is not None
     if args.model is None:
         args.model = (
-            "models/microsoft_Mage-Flow-Edit-Turbo"
+            "models/Comfy-Org_Mage-Flow-Edit-Turbo"
             if args.image is not None or args.edit
-            else "models/microsoft_Mage-Flow-Turbo"
+            else "models/Comfy-Org_Mage-Flow-Turbo"
         )
 
     # Validate: need either --prompt or --worker
@@ -759,7 +759,7 @@ def _run_edit(args, prof, report=None):
         from mage_mlx.pipeline import resolve_text_encoder_path
         # The Edit repository does not carry Qwen weights. Resolve the shared
         # encoder from the converted base-model cache.
-        te_weights_path = resolve_text_encoder_path("models/microsoft_Mage-Flow-Turbo")
+        te_weights_path = resolve_text_encoder_path("models/Comfy-Org_Mage-Flow-Turbo")
         from mage_mlx.text_encoder import MageFlowTextEncoder
         te = MageFlowTextEncoder(
             model_path=te_weights_path if os.path.exists(te_weights_path) else None,

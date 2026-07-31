@@ -190,5 +190,9 @@
     }
   },
   "active": "ffbea2b14361b3ad",
-  "lastOpenFiles": []
+  "lastOpenFiles": [
+    "models/Comfy-Org_Mage-Flow-Turbo",
+    "models/mage_flow_mlx",
+    "uv.lock"
+  ]
 }
