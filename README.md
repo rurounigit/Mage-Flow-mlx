@@ -170,7 +170,7 @@ cat > prompts.jsonl << 'EOF'
 EOF
 
 # Run the worker with profiling
-python generate.py --worker prompts.jsonl --quantize 4 --metadata
+python generate.py --worker prompts.jsonl --metadata
 ```
 
 JSONL format (one JSON object per line):
