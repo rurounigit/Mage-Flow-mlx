@@ -4,29 +4,12 @@ Native Apple Silicon port of Microsoft's **Mage-Flow** (4B MMDiT) using [MLX](ht
 
 Speed:
 
-| Macbook Air M5 24GB |
-|---|---|---|
+Macbook Air M5 24GB
+
+|---|---|
 | 17-18s | generation |
 | 18-22s | editing |
 | Peak RAM | <8GB |
-
-| Parameter | Default | Description |
-|---|---|---|
-| `--prompt TEXT` | required | Description of the image to generate. Concrete subjects, composition, lighting, and style generally produce the most predictable result. |
-| `--model PATH` | `models/microsoft_Mage-Flow-Turbo` | Directory containing converted MLX weights, or a HuggingFace repo ID (e.g. `microsoft/Mage-Flow-Turbo`). On first run, weights are auto-downloaded and converted. |
-| `--steps INTEGER` | `4` | Number of flow-matching denoising steps. Mage-Flow-Turbo is trained for four steps; increasing this is not guaranteed to improve quality and changes the scheduler trajectory. |
-| `--height INTEGER` | `1024` | Output height in pixels. Must be a positive multiple of 16. Higher resolutions require more unified memory and take longer. |
-| `--width INTEGER` | `1024` | Output width in pixels. Must be a positive multiple of 16. Non-square aspect ratios are supported. |
-| `--seed INTEGER` | `42` | Random seed used for initial latent noise. Reusing the same seed and parameters reproduces the same MLX result. |
-| `--guidance FLOAT` | `1.0` | Classifier-free guidance (CFG) scale. `1.0` disables CFG and performs one DiT pass per step. Values above 1 strengthen prompt adherence but very high values can oversaturate or reduce natural detail. |
-| `--negative-prompt TEXT` | one space (`" "`) | Text for the unconditional/negative CFG branch. It is only used when `--guidance` is greater than 1. |
-| `--output PATH` | `none` | Output image path. Bare filename → `output/` subfolder; absolute path with filename → saved there; absolute path without filename → default name from metadata (resolution, steps, seed, quantize) + unique ID; omitted → default name in `output/` subfolder. Existing files are silently overwritten. |
-| `--quantize INT` | none | Use a persistent 4- or 8-bit DiT cache. The variant is created atomically on first use and reused afterward. The canonical checkpoint stays BF16; boundary, modulation, and the sensitive final image MLP expansion remain BF16 inside each mixed-precision variant. |
-| `--worker PATH` | none | Run in persistent JSONL worker mode. Models (DiT, VAE, tokenizer) stay resident across all prompts in the file. Uses prompt queue mode: Qwen is loaded once, all prompts are text-encoded, then Qwen is unloaded. Repeated prompts with the same text skip Qwen entirely via the embedding cache. |
-| `--metadata` | none | Enable phase-level profiling, print terminal report, and save JSON + markdown files |
-
-the json worker is even faster but in case of the Macbook Air especially, thermal throtteling will kick in after 4-6 edits (which brings down the speed).
-You will see your current thermal status in the terminal output.
 
 
 <table align="center" style="border-collapse: collapse; width: 100%; max-width: 1536px; table-layout: fixed;">
