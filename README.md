@@ -186,6 +186,49 @@ JSONL format (one JSON object per line):
 | `steps` | no | Denoising steps (default: 4) |
 | `negative_prompt` | no | Negative prompt (default: " ") |
 
+## Image Editing
+
+### Single Edit
+
+```bash
+python generate.py \
+  --prompt "change the shoe to burgundy leather" \
+  --image test_10_shoe.png \
+  --output test_10_shoe_edited.png
+```
+
+Providing `--image` automatically selects the dedicated `microsoft/Mage-Flow-Edit-Turbo` checkpoint. On first use, the loader downloads and converts it to a cached MLX directory; subsequent runs reuse that cache.
+
+The edit pipeline:
+1. Encodes reference images via VAE → packed latents
+2. Encodes the edit prompt (text + reference images) via the multi-modal text encoder
+3. Concatenates target + reference latents along the sequence dimension
+4. Runs the DiT with multi-image `img_shapes` (target + references)
+5. Slices the output with `target_length` to extract only the target prediction
+6. Applies classifier-free guidance and optional renormalization
+7. Runs the 4-step flow matching loop
+8. Decodes the final latent via VAE
+
+**Note on CFG for edit**: The negative branch must be multimodal (same reference images) — a text-only negative removes vision tokens and produces an invalid unconditional edit condition.
+
+### Edit Worker Mode
+
+```bash
+python generate.py --worker prompts_edit.jsonl --edit
+```
+
+The edit worker mirrors the txt2img worker but with image validation, reference image hashing, and vision cache integration. Each JSONL line requires a `prompt` field and either an `image` field (target image to edit) or a `ref_images` field (list of reference image paths).
+
+### Renormalization
+
+The `--renormalization` flag rescales the CFG-guided velocity prediction to match the L2 norm of the *unconditional* (non-guided) velocity prediction. This preserves the direction change introduced by classifier-free guidance while preventing the magnitude amplification that high guidance scales can cause, which can destabilize the flow matching trajectory:
+
+```bash
+python generate.py --prompt "..." --image target.png --renormalization
+```
+
+**Note:** Renormalization only has an effect when `--guidance` is greater than 1.0. With the default guidance of 1.0 (used by the `Mage-Flow-Edit-Turbo` checkpoint), CFG is disabled and the guided velocity is identical to the conditional velocity, so the norm ratio is 1.0 and renormalization is a no-op.
+
 ## Architecture
 
 ### Component Mapping
@@ -338,49 +381,6 @@ VAE-encoded reference image latents are cached on disk (~10 MB each vs. ~1 GB VA
 - Generation seed (Mage-Flow samples the VAE posterior with the generation seed)
 
 Cache files are stored in `models/microsoft_Mage-Flow-Edit-Turbo/vision_cache/`.
-
-## Image Editing
-
-### Single Edit
-
-```bash
-python generate.py \
-  --prompt "change the shoe to burgundy leather" \
-  --image test_10_shoe.png \
-  --output test_10_shoe_edited.png
-```
-
-Providing `--image` automatically selects the dedicated `microsoft/Mage-Flow-Edit-Turbo` checkpoint. On first use, the loader downloads and converts it to a cached MLX directory; subsequent runs reuse that cache.
-
-The edit pipeline:
-1. Encodes reference images via VAE → packed latents
-2. Encodes the edit prompt (text + reference images) via the multi-modal text encoder
-3. Concatenates target + reference latents along the sequence dimension
-4. Runs the DiT with multi-image `img_shapes` (target + references)
-5. Slices the output with `target_length` to extract only the target prediction
-6. Applies classifier-free guidance and optional renormalization
-7. Runs the 4-step flow matching loop
-8. Decodes the final latent via VAE
-
-**Note on CFG for edit**: The negative branch must be multimodal (same reference images) — a text-only negative removes vision tokens and produces an invalid unconditional edit condition.
-
-### Edit Worker Mode
-
-```bash
-python generate.py --worker prompts_edit.jsonl --edit
-```
-
-The edit worker mirrors the txt2img worker but with image validation, reference image hashing, and vision cache integration. Each JSONL line requires a `prompt` field and either an `image` field (target image to edit) or a `ref_images` field (list of reference image paths).
-
-### Renormalization
-
-The `--renormalization` flag rescales the CFG-guided velocity prediction to match the L2 norm of the *unconditional* (non-guided) velocity prediction. This preserves the direction change introduced by classifier-free guidance while preventing the magnitude amplification that high guidance scales can cause, which can destabilize the flow matching trajectory:
-
-```bash
-python generate.py --prompt "..." --image target.png --renormalization
-```
-
-**Note:** Renormalization only has an effect when `--guidance` is greater than 1.0. With the default guidance of 1.0 (used by the `Mage-Flow-Edit-Turbo` checkpoint), CFG is disabled and the guided velocity is identical to the conditional velocity, so the norm ratio is 1.0 and renormalization is a no-op.
 
 ## Profiling & Metadata
 
