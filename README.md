@@ -1,16 +1,16 @@
 # Mage-Flow MLX
 
-Native Apple Silicon port of Microsoft's **Mage-Flow** (4B MMDiT) using [MLX](https://github.com/ml-explore/mlx).
+Native Apple Silicon port of Microsoft's **Mage-Flow** (4B MMDiT) using [MLX](https://github.com/ml-explore/mlx), partly based on the Mage-Flow edit PR for [mflux](https://github.com/mfluxml/mflux) by [Ivan Fioravanti](https://github.com/ivanfioravanti). Rewired for low memory setups and batch processing.
 
-## What This Is
+Speed:
 
-Mage-Flow is a compact 4B-parameter generative stack for text-to-image generation and image editing, built from:
+Macbook Air M5 24GB
+| 17-18s | generation |
+| 18-22s | editing |
+| Peak RAM | <8GB |
 
-- **Mage-VAE** — lightweight high-fidelity latent tokenizer (16× downsample, 128 latent channels)
-- **NR-MMDiT** — 4B Native-Resolution Multimodal Diffusion Transformer (12 double_stream blocks, 2D multi-scale RoPE)
-- **Qwen3-VL** — text encoder (2560 hidden, 36 layers, 32Q/8KV heads)
-
-This port translates the PyTorch/CUDA implementation to native MLX, running entirely on Apple Silicon. No PyTorch or CUDA is needed at inference time — only MLX.
+the json worker is even faster but in case of the Macbook Air especially, thermal throtteling will kick in after 4-6 edits (which brings down the speed).
+You will see your current thermal status in the terminal output.
 
 
 <table align="center" style="border-collapse: collapse; width: 100%; max-width: 1536px; table-layout: fixed;">
@@ -211,18 +211,6 @@ python generate.py \
 
 Providing `--image` automatically selects the dedicated `microsoft/Mage-Flow-Edit-Turbo` checkpoint. On first use, the loader downloads and converts it to a cached MLX directory; subsequent runs reuse that cache.
 
-The edit pipeline:
-1. Encodes reference images via VAE → packed latents
-2. Encodes the edit prompt (text + reference images) via the multi-modal text encoder
-3. Concatenates target + reference latents along the sequence dimension
-4. Runs the DiT with multi-image `img_shapes` (target + references)
-5. Slices the output with `target_length` to extract only the target prediction
-6. Applies classifier-free guidance and optional renormalization
-7. Runs the 4-step flow matching loop
-8. Decodes the final latent via VAE
-
-**Note on CFG for edit**: The negative branch must be multimodal (same reference images) — a text-only negative removes vision tokens and produces an invalid unconditional edit condition.
-
 ### Edit Worker Mode
 
 <table align="center" style="border-collapse: collapse; width: 100%; max-width: 1536px; table-layout: fixed;">
@@ -305,17 +293,13 @@ python generate.py --worker prompts_edit.jsonl --edit
 
 The edit worker mirrors the txt2img worker but with image validation, reference image hashing, and vision cache integration. Each JSONL line requires a `prompt` field and either an `image` field (target image to edit) or a `ref_images` field (list of reference image paths).
 
-### Renormalization
-
-The `--renormalization` flag rescales the CFG-guided velocity prediction to match the L2 norm of the *unconditional* (non-guided) velocity prediction. This preserves the direction change introduced by classifier-free guidance while preventing the magnitude amplification that high guidance scales can cause, which can destabilize the flow matching trajectory:
-
-```bash
-python generate.py --prompt "..." --image target.png --renormalization
-```
-
-**Note:** Renormalization only has an effect when `--guidance` is greater than 1.0. With the default guidance of 1.0 (used by the `Mage-Flow-Edit-Turbo` checkpoint), CFG is disabled and the guided velocity is identical to the conditional velocity, so the norm ratio is 1.0 and renormalization is a no-op.
-
 ## Architecture
+
+Mage-Flow is a compact 4B-parameter generative stack for text-to-image generation and image editing, built from:
+
+- **Mage-VAE** — lightweight high-fidelity latent tokenizer (16× downsample, 128 latent channels)
+- **NR-MMDiT** — 4B Native-Resolution Multimodal Diffusion Transformer (12 double_stream blocks, 2D multi-scale RoPE)
+- **Qwen3-VL** — text encoder (2560 hidden, 36 layers, 32Q/8KV heads)
 
 ### Component Mapping
 
