@@ -739,6 +739,8 @@ class LiveReport:
         self.prompts: list[_PromptRow] = []
         self._phase_times: list[float] = []  # for relative color scaling
         self._thermal_state: Optional[dict] = None
+        self._thermal_line_printed: bool = False  # tracks if thermal line was printed below the bar
+        self._cursor_on_thermal_line: bool = False  # tracks if cursor is on the thermal line (N+1) vs bar line (N)
         self.profiler = profiler  # reference for incremental saves
         self._print_header()
 
@@ -759,10 +761,22 @@ class LiveReport:
 
     # ── progress bar (non-verbose mode) ──
     def progress_bar(self, name: str) -> None:
-        """Print a single in-place progress bar using carriage return."""
+        """Print a single in-place progress bar using carriage return.
+
+        When a thermal line has been printed below the bar (non-verbose mode),
+        the cursor may be on the thermal line (N+1). We move UP to the bar
+        line (N), clear it, and redraw the bar — leaving the thermal text
+        untouched on the line below.
+        """
         count = len(self.phases)
         bar = '█' * (count * 2)
-        print(f"\r\033[K  [{bar}] {name}", end="", flush=True)
+        if not self.verbose and self._cursor_on_thermal_line:
+            # Cursor is on the thermal line (N+1). Move UP to the bar line (N),
+            # clear it, and print the bar.
+            print(f"\r\033[1A\r\033[K  [{bar}] {name}", end="", flush=True)
+            self._cursor_on_thermal_line = False
+        else:
+            print(f"\r\033[K  [{bar}] {name}", end="", flush=True)
 
     # ── phase lifecycle ──
     def start_phase(self, name: str) -> None:
@@ -960,14 +974,11 @@ class LiveReport:
                 If None, fetches it via :meth:`Profiler.get_thermal_state`.
         """
         if thermal_state is None:
-
             thermal_state = Profiler.get_thermal_state()
         from mage_mlx.thermal import format_thermal_state
-        # Non-verbose mode has an active carriage-return progress line.
-        # Defer printing until print_summary() has finalized that line.
+        # Always store the thermal state for the overview table and metadata
         self._thermal_state = thermal_state
-        if not self.verbose:
-            return
+
         state_str = format_thermal_state(thermal_state)
         # Color-code based on throttling level
         level = thermal_state.get("thermal_throttling", "unknown")
@@ -981,7 +992,28 @@ class LiveReport:
             color = _C.RED
         else:
             color = _C.GRAY
-        print(f"  {_C.BOLD}Thermal:{_C.RESET} {color}{state_str}{_C.RESET}")
+        thermal_line = f"  {_C.BOLD}Thermal:{_C.RESET} {color}{state_str}{_C.RESET}"
+
+        if not self.verbose:
+            # Non-verbose mode: print the thermal line on the line below the
+            # progress bar. The bar stays on its own line (line N); the thermal
+            # text goes on line N+1. On subsequent calls, move the cursor down
+            # one line, clear it, and reprint — so the thermal text updates
+            # in place without creating additional bar lines.
+            if self._thermal_line_printed:
+                # Cursor is on the bar line (N) after progress_bar() printed.
+                # Move DOWN to the thermal line (N+1), clear it, reprint.
+                print(f"\r\033[1B\r\033[K{thermal_line}", end="", flush=True)
+            else:
+                # First time: newline to move below the bar, then print
+                print()
+                print(thermal_line, end="", flush=True)
+                self._thermal_line_printed = True
+            self._cursor_on_thermal_line = True
+            return
+
+        # Verbose mode: print normally (each call on its own line)
+        print(thermal_line)
 
     # ── prompt summary ──
     def add_prompt(
@@ -1042,11 +1074,25 @@ class LiveReport:
 
     # ── finish ──
     def finish(self) -> None:
-        """Print 100% on the progress bar line, replacing the phase name."""
+        """Print 100% on the progress bar line, replacing the phase name.
+
+        After the last progress_bar() call, the cursor is on the bar line (N).
+        The thermal text on line N+1 is untouched. We just clear line N and
+        print 100%.
+
+        If the cursor happens to be on the thermal line (N+1) — e.g. if
+        print_thermal_state() was the last output — we move UP to the bar
+        line first.
+        """
         if not self.verbose:
             count = len(self.phases)
             bar = '█' * (count * 2)
-            print(f"\r\033[K  [{bar}] {_C.GREEN}100%{_C.RESET}", end="", flush=True)
+            if self._cursor_on_thermal_line:
+                # Cursor is on the thermal line (N+1). Move UP to the bar
+                # line (N), clear it, and print 100%.
+                print(f"\r\033[1A\r\033[K  [{bar}] {_C.GREEN}100%{_C.RESET}", end="", flush=True)
+            else:
+                print(f"\r\033[K  [{bar}] {_C.GREEN}100%{_C.RESET}", end="", flush=True)
 
     # ── final summary ──
     def print_summary(self, total_time: float, peak_ram: float, show_text_encode: bool = False) -> None:
@@ -1064,7 +1110,10 @@ class LiveReport:
         if not self.verbose:
             self.finish()
             print()  # Final newline to complete the \r progress bar
-            if self._thermal_state is not None:
+            # Thermal line was already printed below the bar by
+            # print_thermal_state() during generation. Only print it here
+            # as a fallback if it was never printed (e.g. no prompts ran).
+            if self._thermal_state is not None and not self._thermal_line_printed:
                 self._print_thermal_state_line(self._thermal_state)
         print()
         print(f"{_C.BOLD}{_C.CYAN}{'─' * 70}{_C.RESET}")
