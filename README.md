@@ -62,15 +62,27 @@ This port translates the PyTorch/CUDA implementation to native MLX, running enti
 ## Quick Start
 
 ```bash
-# 1. Create virtual environment
-uv venv --python 3.11
-source .venv/bin/activate
+# 1. Clone the repository
+git clone https://github.com/rurounigit/Mage-Flow-mlx.git
+cd Mage-Flow-mlx
 
-# 2. Install dependencies
-uv pip install mlx mlx-lm safetensors torch huggingface_hub pillow numpy regex
+# 2. Install dependencies (creates .venv automatically)
+uv sync
 
 # 3. Generate an image (auto-downloads and converts weights on first run)
-python generate.py --prompt "A futuristic cityscape at sunset, photorealistic"
+uv run python generate.py --prompt "A futuristic cityscape at sunset, photorealistic"
+```
+
+Discover all options:
+
+```bash
+uv run python generate.py --help
+```
+
+Or use the installed console script:
+
+```bash
+uv run mage-flow-generate --prompt "A futuristic cityscape at sunset, photorealistic"
 ```
 
 The converted model preserves the original BF16 precision. Optional quantized
