@@ -306,7 +306,7 @@ def run_worker(
                         report.add_metadata(f"text_encode_neg_{i + 1}", "cache", "HIT")
             prompt_embeds[i] = (cached_embeds, neg_embeds)
             if report and report.verbose:
-                print(f"  Prompt {i + 1}/{len(prompts)}: Cache HIT — skipping Qwen encode")
+                print(f"  Prompt {i + 1:>2}/{len(prompts)}: Cache HIT — skipping Qwen encode")
         else:
             if profiler:
                 profiler.start(f"text_encode_{i + 1}")
@@ -341,7 +341,7 @@ def run_worker(
                     report.stop_phase(f"text_encode_{i + 1}", profiler.get_elapsed(f"text_encode_{i + 1}") or 0.0, profiler.get_phase_rss(f"text_encode_{i + 1}"))
                     report.add_metadata(f"text_encode_{i + 1}", "cache", "MISS")
             if report and report.verbose:
-                print(f"  Prompt {i + 1}/{len(prompts)}: Cache MISS — encoding with Qwen")
+                print(f"  Prompt {i + 1:>2}/{len(prompts)}: Cache MISS — encoding with Qwen")
 
     # Unload Qwen once after all prompts are encoded
     if profiler:
@@ -904,7 +904,7 @@ def run_edit_worker(
                         report.add_metadata(f"text_encode_neg_{i + 1}", "cache", "HIT")
             prompt_embeds[i] = (cached_embeds, pos_mask, neg_embeds, neg_mask)
             if report and report.verbose:
-                print(f"  Prompt {i + 1}/{len(prompts)}: Cache HIT — skipping Qwen encode")
+                print(f"  Prompt {i + 1:>2}/{len(prompts)}: Cache HIT — skipping Qwen encode")
         else:
             if profiler:
                 profiler.start(f"text_encode_{i + 1}")
@@ -948,7 +948,7 @@ def run_edit_worker(
                     )
                     report.add_metadata(f"text_encode_{i + 1}", "cache", "MISS")
             if report and report.verbose:
-                print(f"  Prompt {i + 1}/{len(prompts)}: Cache MISS — encoding with Qwen")
+                print(f"  Prompt {i + 1:>2}/{len(prompts)}: Cache MISS — encoding with Qwen")
 
     # Unload Qwen once after all prompts are encoded
     if profiler:
