@@ -6,10 +6,11 @@ Speed:
 
 Macbook Air M5 24GB
 
-|---|---|
-| 17-18s | generation |
-| 18-22s | editing |
-| Peak RAM | <8GB |
+| mode | time |
+| :--- | :--- |
+| **Generation** | 17–18s |
+| **Editing** | 18–22s |
+| **Peak RAM** | < 8GB |
 
 
 <table align="center" style="border-collapse: collapse; width: 100%; max-width: 1536px; table-layout: fixed;">
