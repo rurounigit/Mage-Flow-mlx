@@ -794,7 +794,7 @@ def _run_edit(args, prof, report=None):
     # always captured for metadata output)
     thermal_state = None
     if report:
-        thermal_state = Profiler.get_thermal_state()
+        thermal_state = prof.get_thermal_state()
         report.print_thermal_state(thermal_state)
 
     # Print prompt header (magenta bold) before edit metadata
