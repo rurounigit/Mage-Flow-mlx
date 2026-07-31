@@ -471,12 +471,12 @@ class Profiler:
                 te_time = summary["text_encode_time"]
                 te_ram = summary.get("text_encode_ram")
                 te_ram_str = f"{te_ram:.2f}" if te_ram is not None else "—"
-                lines.append(f"| — | {te_time:.1f} | {te_ram_str} | — | — | text encode / decode |")
+                lines.append(f"| — | {te_time:.1f} | {te_ram_str} | — | — | — | — | text encode / decode |")
 
             # Overhead row
             if summary and summary.get("overhead", 0) > 0:
                 oh = summary["overhead"]
-                lines.append(f"| — | {oh:.1f} | — | — | — | overhead (load + encode + decode) |")
+                lines.append(f"| — | {oh:.1f} | — | — | — | — | — | overhead (load + encode + decode) |")
             lines.append("")
 
         # ── Run Metadata block ──────────────────────────────────────
@@ -491,6 +491,7 @@ class Profiler:
                 elif key == "peak_memory_gib" and value is not None:
                     value = round(value, 2)
                 lines.append(f"| {key} | {value} |")
+
             lines.append("")
 
         return "\n".join(lines)
@@ -1066,8 +1067,35 @@ class LiveReport:
         # Overview table
         if self.prompts:
             print(f"{_C.BOLD}  Overview:{_C.RESET}")
-            print(f"{_C.DIM}  {'#':>3}  {'Time':>8}   {'Peak RAM':>10}   {'Resolution':>12}   {'Steps':>5}   {'Seed':>5}   {'Thermal':>14}   File{_C.RESET}")
-            print(f"{_C.DIM}  {'─' * 76}{_C.RESET}")
+
+            # Calculate dynamic column widths based on actual content
+            # Column order: #, Time, Peak RAM, Resolution, Steps, Seed, Thermal, File
+            idx_width = max(3, max((len(str(p.index)) for p in self.prompts), default=1))
+            time_width = 8  # "14.9s" fits in 5, but we keep 8 for consistency
+            ram_width = 10  # "7.93GiB" fits in 7, but we keep 10 for consistency
+            res_width = max(12, max((len(p.resolution) for p in self.prompts), default=12))
+            steps_width = max(5, max((len(str(p.steps)) for p in self.prompts), default=1))
+            seed_width = max(5, max((len(str(p.seed)) for p in self.prompts if p.seed is not None), default=1))
+
+            # Calculate thermal width (account for ANSI codes)
+            th_width = 14
+            for p in self.prompts:
+                if p.thermal_state:
+                    from mage_mlx.thermal import format_thermal_state
+                    th_str = format_thermal_state(p.thermal_state)
+                    th_width = max(th_width, _visible_len(th_str))
+
+            # Calculate file width
+            file_width = max((len(p.saved_file) for p in self.prompts if p.saved_file), default=0)
+
+            # Calculate total width for separator line
+            # Format: "  " + idx + "  " + time + "   " + ram + "   " + res + "   " + steps + "   " + seed + "   " + thermal + "   " + file
+            total_width = 2 + idx_width + 2 + time_width + 3 + ram_width + 3 + res_width + 3 + steps_width + 3 + seed_width + 3 + th_width + 3 + file_width
+
+            # Print header
+            print(f"{_C.DIM}  {'#':>{idx_width}}  {'Time':>{time_width}}   {'Peak RAM':>{ram_width}}   {'Resolution':>{res_width}}   {'Steps':>{steps_width}}   {'Seed':>{seed_width}}   {'Thermal':>{th_width}}   File{_C.RESET}")
+            print(f"{_C.DIM}  {'─' * total_width}{_C.RESET}")
+
             gen_times = [p.generation_time for p in self.prompts if p.generation_time is not None]
             if gen_times:
                 t_min = min(gen_times)
@@ -1100,8 +1128,8 @@ class LiveReport:
                     th_str = f"{_C.GRAY}—{_C.RESET}"
                 file_str = f"{_C.GREEN}{p.saved_file}{_C.RESET}" if p.saved_file else f"{_C.GRAY}—{_C.RESET}"
                 print(
-                    f"  {p.index:>3}  {_ansi_rjust(t_str, 8)}   {_ansi_rjust(r_str, 10)}   "
-                    f"{p.resolution:>12}   {p.steps:>5}   {seed_str:>5}   {_ansi_rjust(th_str, 14)}   {file_str}"
+                    f"  {p.index:>{idx_width}}  {_ansi_rjust(t_str, time_width)}   {_ansi_rjust(r_str, ram_width)}   "
+                    f"{p.resolution:>{res_width}}   {p.steps:>{steps_width}}   {seed_str:>{seed_width}}   {_ansi_rjust(th_str, th_width)}   {file_str}"
                 )
 
             sum_gen = sum(p.generation_time for p in self.prompts if p.generation_time is not None)
@@ -1123,26 +1151,26 @@ class LiveReport:
                             if text_encode_ram is None or ph.peak_rss_gib > text_encode_ram:
                                 text_encode_ram = ph.peak_rss_gib
                 if text_encode_time > 0:
-                    print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
+                    print(f"{_C.DIM}  {'─' * total_width}{_C.RESET}")
                     te_str = _colorize_total(text_encode_time)
                     if text_encode_ram is not None:
                         te_ram_str = _colorize_ram(text_encode_ram)
                     else:
                         te_ram_str = f"{_C.GRAY}—{_C.RESET}"
                     print(
-                        f"  {'—':>3}  {_ansi_rjust(te_str, 8)}   {_ansi_rjust(te_ram_str, 10)}   "
-                        f"{'—':>12}   {'—':>5}   {_C.GRAY}text encode / decode{_C.RESET}"
+                        f"  {'—':>{idx_width}}  {_ansi_rjust(te_str, time_width)}   {_ansi_rjust(te_ram_str, ram_width)}   "
+                        f"{'—':>{res_width}}   {'—':>{steps_width}}   {'—':>{seed_width}}   {_ansi_rjust('—', th_width)}   {_C.GRAY}text encode / decode{_C.RESET}"
                     )
 
             overhead = total_time - sum_gen
             if show_text_encode:
                 overhead -= text_encode_time
             if overhead > 0:
-                print(f"{_C.DIM}  {'─' * 62}{_C.RESET}")
+                print(f"{_C.DIM}  {'─' * total_width}{_C.RESET}")
                 oh_str = _colorize_total(overhead)
                 print(
-                    f"  {'—':>3}  {_ansi_rjust(oh_str, 8)}   {_ansi_rjust('—', 10)}   "
-                    f"{'—':>12}   {'—':>5}   {_C.GRAY}overhead (load + encode + decode){_C.RESET}"
+                    f"  {'—':>{idx_width}}  {_ansi_rjust(oh_str, time_width)}   {_ansi_rjust('—', ram_width)}   "
+                    f"{'—':>{res_width}}   {'—':>{steps_width}}   {'—':>{seed_width}}   {_ansi_rjust('—', th_width)}   {_C.GRAY}overhead (load + encode + decode){_C.RESET}"
                 )
             print()
 
@@ -1162,3 +1190,5 @@ class LiveReport:
             else:
                 print(f"  {key}: {value}")
         print()
+
+
