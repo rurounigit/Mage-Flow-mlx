@@ -616,6 +616,74 @@ class TestWorkerRouting:
         assert len(prompts) == 1  # image is valid for edit worker
 
 
+class TestEditWorkerOverwrite:
+    """Regression tests for the edit worker's silent-overwrite policy.
+
+    The edit worker's ``image`` is a ``GeneratedImage`` (not a plain PIL
+    image). Its ``.save()`` defaults to ``overwrite=False``, which appends
+    ``_1``, ``_2``, ... to existing files. The worker must pass
+    ``overwrite=True`` so it silently overwrites, matching the txt2img
+    worker and the unified ``resolve_output_path()`` policy.
+    """
+
+    @staticmethod
+    def _make_generated_image() -> "GeneratedImage":
+        """Construct a minimal GeneratedImage with a valid ModelConfig."""
+        from mage_mlx.mflux_src.mflux.utils.generated_image import GeneratedImage
+        from mage_mlx.mflux_src.mflux.models.common.config import ModelConfig
+        import mlx.core as mx
+        from PIL import Image
+
+        config = ModelConfig(
+            priority=1,
+            aliases=["test"],
+            model_name="test/Mage-Flow",
+            base_model="mage-flow",
+            controlnet_model=None,
+            custom_transformer_model=None,
+            num_train_steps=4,
+            max_sequence_length=2048,
+            supports_guidance=True,
+            requires_sigma_shift=False,
+        )
+        return GeneratedImage(
+            image=Image.new("RGB", (8, 8)),
+            model_config=config,
+            seed=42,
+            prompt="test",
+            steps=4,
+            guidance=1.0,
+            precision=mx.bfloat16,
+            quantization=None,
+            generation_time=1.0,
+        )
+
+    def test_generated_image_save_overwrites_by_default(self, tmp_path):
+        """GeneratedImage.save() without overwrite appends _1 to existing files."""
+        from PIL import Image
+
+        target = tmp_path / "out.png"
+        # Pre-create the file so the unique-naming path triggers
+        Image.new("RGB", (8, 8)).save(target)
+
+        gen = self._make_generated_image()
+        gen.save(str(target))
+        # Default (overwrite=False) appends _1
+        assert (tmp_path / "out_1.png").exists()
+
+    def test_generated_image_save_with_overwrite_true(self, tmp_path):
+        """GeneratedImage.save(overwrite=True) silently overwrites."""
+        target = tmp_path / "out.png"
+        from PIL import Image
+        Image.new("RGB", (8, 8)).save(target)
+
+        gen = self._make_generated_image()
+        gen.save(str(target), overwrite=True)
+        # No _1 file created; original path overwritten
+        assert (tmp_path / "out.png").exists()
+        assert not (tmp_path / "out_1.png").exists()
+
+
 class TestEditRegressionContracts:
     """Regression tests for the bb898d2 edit-worker failures."""
 

@@ -1235,9 +1235,14 @@ def run_edit_worker(
         )
 
         # Save image
+        # NOTE: `image` is a GeneratedImage (not a plain PIL image) in edit
+        # mode. Its .save() defaults to overwrite=False, which appends _1, _2,
+        # ... to existing files. Pass overwrite=True so the edit worker silently
+        # overwrites, matching the txt2img worker and the unified
+        # resolve_output_path() policy.
         if profiler:
             profiler.start(f"save_{i + 1}")
-        image.save(params["output"])
+        image.save(params["output"], overwrite=True)
         if profiler:
             profiler.stop(f"save_{i + 1}")
         if report:

@@ -191,16 +191,20 @@
   },
   "active": "ffbea2b14361b3ad",
   "lastOpenFiles": [
-    "models/Comfy-Org_Mage-Flow-Turbo",
-    "mage_mlx/__pycache__/loader.cpython-314.pyc",
-    "mage_mlx/__pycache__/timestep.cpython-314.pyc",
-    "mage_mlx/__pycache__/rope.cpython-314.pyc",
-    "mage_mlx/__pycache__/dit.cpython-314.pyc",
-    "mage_mlx/__pycache__/pipeline.cpython-314.pyc",
-    "mage_mlx/__pycache__/__init__.cpython-314.pyc",
-    "models/Comfy-Org_Mage-Flow-Turbo/embedding_cache/bdbf74b223e90df388f1058c9e8616f8824dc0ab53396ac6398bfc0c7c122a10.json",
-    "models/Comfy-Org_Mage-Flow-Turbo/embedding_cache/bdbf74b223e90df388f1058c9e8616f8824dc0ab53396ac6398bfc0c7c122a10.npy",
-    "models/Comfy-Org_Mage-Flow-Turbo/embedding_cache",
-    "models/shared/mage_flow_qwen3vl/text_encoder.safetensors"
+    "models/Comfy-Org_Mage-Flow-Edit-Turbo/vision_cache/2defaca0d49f3ad7a2efb7dd74a14a9216355d3aa66e6ace28c862cc6f160d2f.json",
+    "models/Comfy-Org_Mage-Flow-Edit-Turbo/vision_cache/2defaca0d49f3ad7a2efb7dd74a14a9216355d3aa66e6ace28c862cc6f160d2f.npy",
+    "models/Comfy-Org_Mage-Flow-Edit-Turbo/vision_cache/2defaca0d49f3ad7a2efb7dd74a14a9216355d3aa66e6ace28c862cc6f160d2f.tmp.npy",
+    "output/1024x1024_s4_seed42_f16_8456245e.png",
+    "tests/test_vae_roundtrip.py",
+    "models/Comfy-Org_Mage-Flow-Edit-Turbo/vision_cache/efc3bf2633c4fabcb1a125ea85769671b0cb395f8b4f89bab7dc352347aa63d5.json",
+    "models/Comfy-Org_Mage-Flow-Edit-Turbo/vision_cache/efc3bf2633c4fabcb1a125ea85769671b0cb395f8b4f89bab7dc352347aa63d5.npy",
+    "models/Comfy-Org_Mage-Flow-Edit-Turbo/vision_cache/efc3bf2633c4fabcb1a125ea85769671b0cb395f8b4f89bab7dc352347aa63d5.tmp.npy",
+    "output/1024x1024_s4_seed42_f16_da3ebc5e.png",
+    "models/Comfy-Org_Mage-Flow-Edit-Turbo/vision_cache/5beab9b28e76816b8598ccac94e61fedad640421696e9d509c07abca99011e65.json",
+    "models/Comfy-Org_Mage-Flow-Edit-Turbo/vision_cache/5beab9b28e76816b8598ccac94e61fedad640421696e9d509c07abca99011e65.npy",
+    "models/Comfy-Org_Mage-Flow-Edit-Turbo/vision_cache/5beab9b28e76816b8598ccac94e61fedad640421696e9d509c07abca99011e65.tmp.npy",
+    "models/Comfy-Org_Mage-Flow-Edit-Turbo/vision_cache/1de4e83a773e39d49aa1d0f96b84d5a26802cbad10e540fbf69d917bbc0cdfe6.json",
+    "output/1024x1024_s4_seed42_f16_c78bafdd.png",
+    "output/1024x1024_s4_seed42_f16_d435a067.png"
   ]
 }

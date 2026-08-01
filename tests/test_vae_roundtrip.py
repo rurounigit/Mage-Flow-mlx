@@ -22,8 +22,10 @@ img_norm = (img * 2 - 1).astype(np.float32)
 img_mx = mx.array(img_norm)[None, ...]  # [1, H, W, 3]
 
 # Encode
+# The pipeline VAE is constructed with sample_posterior=True, so encode()
+# requires a key for the posterior noise (matches the edit pipeline usage).
 print("Encoding...")
-latent = pipe.vae.encode(img_mx)
+latent = pipe.vae.encode(img_mx, key=mx.random.key(42))
 print(f"Latent shape: {latent.shape}, mean={float(latent.mean()):.4f}, std={float(latent.std()):.4f}")
 
 # Decode
